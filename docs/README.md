@@ -1,21 +1,14 @@
-# 본 프로젝트에 관련된 규칙과 개발을 위한 각종 가이드 문서
+# 프로젝트 운영 지침 및 개발 가이드
 
 ### 문서 목록
 
-- [C# CLI 프로그램 개발을 위한 추천 라이브러리](./cli-lib-guide.md)  
-  → CLI 프로그램 개발 시 활용 가능한 라이브러리 정리
-
-- [C# 코딩 컨벤션 가이드](./csharp-convention.md)  
-  → 코드 스타일 및 네이밍 규칙 정리
-
-- [WSL2 Ubuntu 환경 설치 및 Docker 설치](./docker-guide.md)  
-  → WSL2 및 Docker 설치 방법 안내
-
-- [C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드](./dotnet-guide.md)  
-  → .NET 환경 설정 및 프로젝트 생성 방법 설명
-
-- [이슈 작업 선점 관련 규정 가이드](./issue-guide.md)  
-  → 이슈 선점 및 작업 규칙 안내
+- [cli-lib-guide.md](./cli-lib-guide.md): C# CLI 프로그램 개발을 위한 추천 라이브러리
+- [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
+- [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드(WSL2 Ubuntu 기준)
+- [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
+- [issue-guide.md](./issue-guide.md): 이슈 작업 선점 관련 규정 가이드
+- [octokit-guide.md](./octokit-guide.md): Octokit.NET 활용 가이드
+- [vscode-extensions.md](./vscode-extensions.md): C# 개발을 위한 VSCode 확장 가이드 (Codespaces)
 
 ---
 
