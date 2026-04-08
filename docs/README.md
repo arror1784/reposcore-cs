@@ -14,7 +14,7 @@
 - [score-guide.md](./score-guide.md): 오픈소스 기여 점수 산정 가이드
 - [vscode-extensions.md](./vscode-extensions.md): C# 개발을 위한 VSCode 확장 가이드 (Codespaces)
 <!-- DOC_LIST_END -->
-
+---
 > ⚠️ **문서 목록은 수작업으로 갱신하지 마세요.**
 > `docs/*.md` 문서를 생성·삭제하거나 제목을 변경할 경우, 반드시 아래 스크립트를 실행하여 목록을 자동 갱신하세요.
 >
