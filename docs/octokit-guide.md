@@ -2,7 +2,7 @@
 
 [Octokit 라이브러리 공식 홈페이지](https://github.com/octokit)
 
-> 이 문서는 C# 환경에서 GitHub API를 사용하기 위한 라이브러리인 Octokit.NET의 기본 사용법을 설명합니다.
+> C# 환경에서 GitHub API를 사용하기 위한 라이브러리인 Octokit.NET의 기본 사용법입니다.  
 > 저장소 이슈 조회, Pull Request 조회 등 GitHub 정보 연동 기능 구현 전에 기본 구조를 이해하는 데 목적이 있습니다.
 
 ## 1. Octokit.NET 설치 방법
@@ -141,3 +141,133 @@ Console.WriteLine(rateLimits.Resources.Core.Remaining);
 | PR 조회 | `PullRequest.GetAllForRepository()` |
 | 인증 설정 | `Credentials()`                     |
 
+---
+
+## GraphQL 활용 가이드 (Octokit 환경)
+
+
+[Octokit.GraphQL.NET 공식 저장소](https://github.com/octokit/octokit.graphql.net)
+
+> C# 환경에서 Octokit 기반으로 GraphQL API를 사용하는 방법입니다.
+> GraphQL의 기본 문법 및 개념은 공식 문서를 참고하고, 여기서는 설치 및 사용 방법 중심으로 다룹니다.
+
+---
+
+## 1. 안내
+
+GraphQL의 개념, 문법, 쿼리 작성 방법은 아래 공식 문서를 참고합니다.
+
+* GraphQL 기본 튜토리얼: https://graphql.org/learn/
+* GitHub GraphQL API 문서: https://docs.github.com/en/graphql
+
+이 문서에서는 **Octokit 환경에서 GraphQL을 사용하는 방법만 설명합니다.**
+
+---
+
+## 2. 설치 방법
+
+GraphQL을 사용하려면 `Octokit.GraphQL` 패키지를 설치해야 합니다.
+
+```bash
+dotnet add package Octokit.GraphQL --prerelease
+```
+
+### 설명
+
+* `Octokit.GraphQL`은 GitHub GraphQL API를 위한 .NET 라이브러리입니다.
+* 현재 베타(pre-release) 버전으로 제공됩니다.
+
+---
+
+## 3. 기본 설정
+
+```csharp
+using Octokit;
+using Octokit.GraphQL;
+
+var connection = new Connection(
+    new ProductHeaderValue("reposcore-app"),
+    "YOUR_GITHUB_TOKEN"
+);
+```
+
+### 설명
+
+* `ProductHeaderValue` : 어플리케이션 이름
+* `YOUR_GITHUB_TOKEN` : GitHub Personal Access Token
+
+-> GitHub 토큰 필요
+
+---
+
+## 4. 사용 예시
+
+### 4.1 저장소 이슈 조회
+
+```csharp
+using Octokit;
+using Octokit.GraphQL;
+
+var connection = new Connection(
+    new ProductHeaderValue("reposcore-app"),
+    "YOUR_GITHUB_TOKEN"
+);
+
+var query = new Query()
+    .Repository("owner", "repo-name")
+    .Issues(first: 5)
+    .Nodes
+    .Select(issue => new
+    {
+        issue.Number,
+        issue.Title
+    });
+
+var issues = await connection.Run(query);
+
+foreach (var issue in issues)
+{
+    Console.WriteLine($"이슈 번호: {issue.Number} - {issue.Title}");
+}
+```
+
+---
+
+### 4.2 Pull Request 조회
+
+```csharp
+using Octokit;
+using Octokit.GraphQL;
+
+var connection = new Connection(
+    new ProductHeaderValue("reposcore-app"),
+    "YOUR_GITHUB_TOKEN"
+);
+
+var query = new Query()
+    .Repository("owner", "repo-name")
+    .PullRequests(first: 5)
+    .Nodes
+    .Select(pr => new
+    {
+        pr.Number,
+        pr.Title
+    });
+
+var pullRequests = await connection.Run(query);
+
+foreach (var pr in pullRequests)
+{
+    Console.WriteLine($"PR 번호: {pr.Number} - {pr.Title}");
+}
+```
+
+---
+
+## 5. 참고 사항
+
+* `Octokit.GraphQL`은 기존 `Octokit`과 별도의 패키지입니다.
+* GraphQL은 문자열이 아닌 **C# 코드 형태로 쿼리를 작성**합니다.
+* 필요한 데이터만 선택해서 가져올 수 있습니다.
+
+---

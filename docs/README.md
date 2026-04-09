@@ -3,7 +3,8 @@
 ### 문서 목록
 
 <!-- DOC_LIST_START -->
-- [cli-lib-guide.md](./cli-lib-guide.md): C# CLI 프로그램 개발을 위한 추천 라이브러리
+- [cocona-guide.md](./cocona-guide.md): Cocona 라이브러리 가이드
+- [codespaces-rebuild-guide.md](./codespaces-rebuild-guide.md): Codespaces에서 변경된 devcontainer 설정 적용 방법 (Rebuild)
 - [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
 - [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드
 - [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
@@ -14,13 +15,28 @@
 - [vscode-extensions.md](./vscode-extensions.md): C# 개발을 위한 VSCode 확장 가이드
 <!-- DOC_LIST_END -->
 ---
-> ⚠️ **문서 목록은 수작업으로 갱신하지 마세요.**
-> `docs/*.md` 문서를 생성·삭제하거나 제목을 변경할 경우, 반드시 아래 스크립트를 실행하여 목록을 자동 갱신하세요.
+> ⚠️**아래 상황이 발생하면 반드시 스크립트를 통해 목록을 자동 갱신해줘야 합니다.**
+> 
+>- docs/*.md 경로에 새로운 문서를 생성한 경우
+>
+>- 기존 문서를 삭제한 경우
+>
+>- 파일 이름을 변경하거나, 문서 내부의 최상위 제목(# 제목)을 수정한 경우
+>```실행 방법 (Root 디렉터리에서 실행시)
+>1.Codespaces 실행
+>2.하단의 Terminal 창을 확인합니다. (안 보인다면 Ctrl + ` 입력)
+>  아래 명령어를 입력하여 스크립트를 실행합니다.
+> ```
 > ```bash
 > python docs/update-docs-readme.py
 > ```
 >
 > 스크립트 위치: `/docs/update-docs-readme.py`
+> ```
+> 참고사항: 실행 명령어는 현재 작업중인 디렉터리에 따라 유동적으로 변동될 수 있음.
+> 예시) Root가 아닌 docs/에 위치할 시, python update-docs-readme.py 명령어 사용 시 작동
+> ```
+>⚠️ **수작업으로 문서 목록 갱신하지 마세요.**
 ---
 프로젝트 내 문서 파일의 일관성을 유지하기 위해 다음과 같은 파일 이름 생성 규칙을 따릅니다.
 ---

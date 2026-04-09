@@ -3,8 +3,8 @@ update_docs_readme.py
 ---------------------
 docs/ 폴더의 마크다운 파일을 탐색하여 /docs/README.md의 문서 목록을 자동으로 갱신합니다.
 
-사용법:
-    python update_docs_readme.py
+현재 작업 위치가 root일 때 기준 사용법:
+    python docs/update-docs-readme.py
 
 동작:
     1. docs/ 폴더에서 README.md를 제외한 모든 .md 파일을 탐색
