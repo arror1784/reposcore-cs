@@ -13,6 +13,7 @@
 4. [var 사용 기준](#4-var-사용-기준)
 5. [nullable 사용 여부 및 권장 패턴](#5-nullable-사용-여부-및-권장-패턴)
 6. [공백 / 들여쓰기 / 라인 길이](#6-공백--들여쓰기--라인-길이)
+7. [.editorconfig 설정 및 활용법](#7-editorconfig-설정-및-활용법)
 
 ---
 
@@ -372,6 +373,52 @@ CallMethod(param1, param2);
 var sum = a+b;
 CallMethod( param1 , param2 );
 ```
+
+---
+
+## 7. .editorconfig 설정 및 활용법
+
+본 프로젝트는 **Microsoft .NET Runtime 코딩 스타일 가이드**를 기반으로 한 `.editorconfig` 파일을 레포 루트에 제공합니다.  
+이 파일은 위 컨벤션(1~6항)을 IDE 수준에서 자동으로 강제하며, 별도의 수작업 없이 일관된 코드 스타일을 유지할 수 있습니다.
+
+### 적용 규칙 요약
+
+| 항목 | 설정값 |
+|------|--------|
+| 인코딩 | UTF-8 |
+| 줄바꿈 | LF |
+| 들여쓰기 | 4 spaces (탭 금지) |
+| 중괄호 스타일 | Allman (새 줄 중괄호) |
+| private 인스턴스 필드 | `_camelCase` |
+| private static 필드 | `s_camelCase` |
+| 공개 멤버 | `PascalCase` |
+
+### 사용 방법
+
+#### VSCode / Codespaces
+
+1. **EditorConfig** 확장을 설치합니다.  
+   - 확장 ID: `EditorConfig.EditorConfig`  
+   - Codespaces 환경에서는 `devcontainer.json`에 이미 포함되어 있어 자동 설치됩니다.
+2. 파일을 저장할 때 `.editorconfig` 규칙이 자동으로 적용됩니다.
+
+#### C# Dev Kit과의 호환
+
+**C# Dev Kit** (`ms-dotnettools.csdevkit`) 확장은 `.editorconfig`의 명명 규칙(Naming Conventions)을 읽어  
+규칙 위반 시 경고(`warning`)를 표시합니다. 별도 설정 없이 두 확장을 함께 사용하면 됩니다.
+
+#### 명명 규칙 검증 (`dotnet format`)
+
+> ⚠️ `.NET 10 preview` 환경에서는 `dotnet build` 시 명명 규칙 위반(`IDE1006`)이 표시되지 않을 수 있습니다.  
+> 이 경우 아래 명령어로 직접 검증하세요.
+
+```bash
+dotnet format --verify-no-changes --diagnostics IDE1006
+```
+
+- 명명 규칙 위반이 있으면 `IDE1006: Naming rule violation` 메시지 출력
+- 위반이 없으면 정상 종료
+- .NET 정식 릴리즈 후에는 `dotnet build`에서도 자동으로 표시됩니다.
 
 ---
 

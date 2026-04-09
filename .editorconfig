@@ -1,0 +1,97 @@
+# .editorconfig — Microsoft .NET Runtime 스타일 가이드 기반
+# https://github.com/dotnet/runtime/blob/main/docs/coding-guidelines/coding-style.md
+
+root = true
+
+# ── 공통 설정 ──────────────────────────────────────────────────────────────────
+[*]
+charset                  = utf-8
+end_of_line              = lf
+indent_style             = space
+indent_size              = 4
+trim_trailing_whitespace = true
+insert_final_newline     = true
+
+# ── Markdown ───────────────────────────────────────────────────────────────────
+[*.md]
+trim_trailing_whitespace = false
+
+# ── C# ────────────────────────────────────────────────────────────────────────
+[*.cs]
+indent_size = 4
+
+# 중괄호 스타일: Allman (새 줄 중괄호)
+csharp_new_line_before_open_brace                         = all
+csharp_new_line_before_else                               = true
+csharp_new_line_before_catch                              = true
+csharp_new_line_before_finally                            = true
+csharp_new_line_before_members_in_object_initializers    = true
+csharp_new_line_before_members_in_anonymous_types        = true
+
+# 들여쓰기
+csharp_indent_case_contents        = true
+csharp_indent_switch_labels        = true
+csharp_indent_block_contents       = true
+csharp_indent_braces               = false
+
+# 공백
+csharp_space_after_cast                                          = false
+csharp_space_after_keywords_in_control_flow_statements           = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses       = false
+csharp_space_before_colon_in_inheritance_clause                  = true
+csharp_space_after_colon_in_inheritance_clause                   = true
+csharp_space_around_binary_operators                             = before_and_after
+
+# var 사용: 타입이 명확한 경우에만
+csharp_style_var_for_built_in_types    = false : suggestion
+csharp_style_var_when_type_is_apparent = true  : suggestion
+csharp_style_var_elsewhere             = false : suggestion
+
+# 명명 규칙 (Naming Conventions) ───────────────────────────────────────────────
+
+## 심볼 정의
+
+### private 인스턴스 필드
+dotnet_naming_symbols.private_instance_fields.applicable_kinds           = field
+dotnet_naming_symbols.private_instance_fields.applicable_accessibilities = private, internal
+dotnet_naming_symbols.private_instance_fields.required_modifiers         =
+
+### private static 필드
+dotnet_naming_symbols.private_static_fields.applicable_kinds           = field
+dotnet_naming_symbols.private_static_fields.applicable_accessibilities = private, internal
+dotnet_naming_symbols.private_static_fields.required_modifiers         = static
+
+### 공개 멤버 (클래스, 메서드, 프로퍼티, 이벤트, 열거형 등)
+dotnet_naming_symbols.public_members.applicable_kinds           = class, struct, interface, enum, property, method, event, delegate
+dotnet_naming_symbols.public_members.applicable_accessibilities = public, protected, protected_internal
+
+## 스타일 정의
+
+### _ 접두사 + camelCase
+dotnet_naming_style.underscore_camel_case.capitalization  = camel_case
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+
+### s_ 접두사 + camelCase
+dotnet_naming_style.s_underscore_camel_case.capitalization  = camel_case
+dotnet_naming_style.s_underscore_camel_case.required_prefix = s_
+
+### PascalCase
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+## 규칙 적용
+
+### private 인스턴스 필드 → _camelCase
+dotnet_naming_rule.private_instance_fields_should_be_underscore_camel.symbols  = private_instance_fields
+dotnet_naming_rule.private_instance_fields_should_be_underscore_camel.style    = underscore_camel_case
+dotnet_naming_rule.private_instance_fields_should_be_underscore_camel.severity = warning
+
+### private static 필드 → s_camelCase
+dotnet_naming_rule.private_static_fields_should_be_s_underscore_camel.symbols  = private_static_fields
+dotnet_naming_rule.private_static_fields_should_be_s_underscore_camel.style    = s_underscore_camel_case
+dotnet_naming_rule.private_static_fields_should_be_s_underscore_camel.severity = warning
+
+### 공개 멤버 → PascalCase
+dotnet_naming_rule.public_members_should_be_pascal_case.symbols  = public_members
+dotnet_naming_rule.public_members_should_be_pascal_case.style    = pascal_case
+dotnet_naming_rule.public_members_should_be_pascal_case.severity = warning
