@@ -1,6 +1,7 @@
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
+using Octokit;
 using Octokit.GraphQL;
 using Octokit.GraphQL.Model;
 
@@ -8,97 +9,63 @@ namespace RepoScore.Services
 {
     public class GitHubService
     {
-        private readonly Connection _connection;
+        private readonly Octokit.GraphQL.Connection _connection;
         private readonly string _owner;
         private readonly string _repo;
 
         public GitHubService(string owner, string repo, string token)
         {
-            _owner = owner ?? throw new ArgumentNullException(nameof(owner));
-            _repo = repo ?? throw new ArgumentNullException(nameof(repo));
+            _owner = owner;
+            _repo = repo;
 
-            _connection = new Connection(
-                new ProductHeaderValue("reposcore-cs"),
+            _connection = new Octokit.GraphQL.Connection(
+                new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"),
                 token
             );
         }
 
-        /// <summary>
-        /// 이슈 + PR + 커밋을 단일 API 호출로 조회
-        /// 필요한 데이터만 선택적으로 가져옴
-        /// </summary>
-        public async Task<object> GetRepositorySummaryAsync(DateTimeOffset? since = null)
+        // PR 개수
+        public async Task<int> GetPullRequestCountAsync(string authorLogin)
         {
-            try
-            {
-                var query =
-                    from repo in _connection.Repository(_owner, _repo)
-                    select new
-                    {
-                        // 이슈 (서버 필터링 + 필요한 필드만)
-                        Issues = repo.Issues(
-                                first: 20,
-                                states: new[] { IssueState.Open, IssueState.Closed },
-                                filterBy: since.HasValue
-                                    ? new IssueFilters { Since = since.Value }
-                                    : null
-                            )
-                            .Nodes
-                            .Select(i => new
-                            {
-                                i.Number,
-                                i.Title,
-                                i.State,
-                                i.CreatedAt,
+            var query =
+                new Query()
+                .Search(
+                    query: $"repo:{_owner}/{_repo} is:pr author:{authorLogin}",
+                    type: SearchType.Issue,
+                    first: 1)
+                .Select(x => x.IssueCount);
 
-                                // 댓글 일부만
-                                Comments = i.Comments(first: 3)
-                                    .Nodes
-                                    .Select(c => new
-                                    {
-                                        c.Author.Login,
-                                        c.Body
-                                    })
-                            }),
+            return await _connection.Run(query);
+        }
 
-                        // PR (필요한 필드만)
-                        PullRequests = repo.PullRequests(
-                                first: 20,
-                                states: new[] { PullRequestState.Open, PullRequestState.Closed }
-                            )
-                            .Nodes
-                            .Select(pr => new
-                            {
-                                pr.Number,
-                                pr.Title,
-                                pr.State,
-                                pr.CreatedAt,
-                                Author = pr.Author.Login
-                            }),
+        // Issue 개수
+        public async Task<int> GetIssueCountAsync(string authorLogin)
+        {
+            var query =
+                new Query()
+                .Search(
+                    query: $"repo:{_owner}/{_repo} is:issue author:{authorLogin}",
+                    type: SearchType.Issue,
+                    first: 1)
+                .Select(x => x.IssueCount);
 
-                        // 커밋 (브랜치 기준 + 일부만)
-                        Commits = repo.Ref("refs/heads/main")
-                            .Target
-                            .Cast<Commit>()
-                            .History(first: 20)
-                            .Select(c => new
-                            {
-                                c.Message,
-                                c.CommittedDate,
-                                Author = c.Author.Name
-                            }),
+            return await _connection.Run(query);
+        }
 
-                        // Count만 필요한 경우 (핵심 최적화)
-                        IssueCount = repo.Issues(null, null, null).TotalCount,
-                        PullRequestCount = repo.PullRequests(null, null, null).TotalCount
-                    };
+        // PR 댓글
+        public async Task<List<string>> GetPullRequestCommentsAsync(int prNumber)
+        {
+            var query =
+                new Query()
+                .Repository(_owner, _repo)
+                .PullRequest(prNumber)
+                .Comments(first: 50)
+                .Nodes
+                .Select(c => c.Body);
 
-                return await query.FirstAsync();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"GraphQL 조회 실패: {ex.Message}", ex);
-            }
+            var result = await _connection.Run(query);
+
+            return new List<string>(result);
         }
     }
 }
