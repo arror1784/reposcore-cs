@@ -28,7 +28,7 @@
 ---
 ### Fork한 저장소를 원본(upstream)과 동기화하기
 
-수업에서는 GitHub에서 원본 저장소를 **fork**한 뒤, 자신의 fork에서 Codespaces를 여는 방식으로 작업함.
+수업에서는 보통 GitHub에서 원본 저장소를 **fork**한 뒤, 자신의 fork에서 Codespaces를 여는 방식으로 작업함.
 
 이 방식에서는 `origin`은 **내 fork 저장소**, `upstream`은 **원본(공식) 저장소**를 의미함.
 원본 저장소에 새로운 변경사항이 생겼을 때 내 Codespaces에 반영하려면 아래 두 방법 중 하나를 사용함.
@@ -56,27 +56,24 @@ git pull origin main
 
 ---
 
-#### 방법 B — Codespaces 터미널만으로 처리
+**Step 1. upstream 등록 확인**
 
-**Step 1. upstream 등록 (Codespaces를 처음 열었을 때 최초 1회만 실행)**
+> ℹ️ **Codespaces에서는 `upstream`이 자동으로 등록됩니다.** (`git remote add upstream ...`은 Codespaces에서 필요 없음.)
+> 아래 명령어로 먼저 확인.
 
-> **코드스페이스를 내 fork에서 열었다면, `upstream`은 자동으로 등록되지 않음.**
-> 아래 명령어로 직접 등록해야 함.
-
-```bash
-git remote add upstream https://github.com/oss2026hnu/reposcore-cs.git
-```
-
-등록 후 확인:
 ```bash
 git remote -v
 ```
-아래와 같이 `origin`(내 fork)과 `upstream`(원본)이 모두 보이면 정상.
+아래와 같이 `origin`(내 fork)과 `upstream`(원본)이 모두 보이면 정상입니다.
 ```
 origin    https://github.com/내아이디/reposcore-cs.git (fetch)
 origin    https://github.com/내아이디/reposcore-cs.git (push)
 upstream  https://github.com/oss2026hnu/reposcore-cs.git (fetch)
 upstream  https://github.com/oss2026hnu/reposcore-cs.git (push)
+```
+만약 `upstream`이 없다면 직접 등록합니다.
+```bash
+git remote add upstream https://github.com/oss2026hnu/reposcore-cs.git
 ```
 
 **Step 2. 원본 저장소의 최신 내용 가져오기**
@@ -102,7 +99,7 @@ git push
 | | 방법 A (Sync Fork + pull) | 방법 B (터미널만) |
 |---|---|---|
 | 충돌 확인 | GitHub 웹에서 시각적으로 확인 가능 | 터미널 메시지로 확인 |
-| upstream 등록 | 불필요 | 최초 1회 필요 |
+| upstream 등록 | 불필요 | Codespaces에서 자동 등록되므로 보통 불필요 |
 | 단계 수 | 적음 | 많음 |
 | 추천 상황 | 처음 사용하거나 충돌이 걱정될 때 | 터미널 작업에 익숙할 때 |
 
