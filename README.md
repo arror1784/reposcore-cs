@@ -11,28 +11,13 @@ A CLI for scoring student participation in an open-source class repo, implemente
 
 ## Quick Start
 
-### 1. 사전 준비
-
-(현재 Codespace에서는 필요없음. 이미 설치되어 있을 것임.)
-
-- [.NET 10.0 SDK](https://dotnet.microsoft.com/download) 설치 필요
-  - 자세한 설치 방법은 [docs/dotnet-guide.md](docs/dotnet-guide.md) 참고
-
-### 2. 저장소 클론
-(Codespace에서는 필요없음. 이미 클론되어 있음.)
-
-```bash
-git clone https://github.com/oss2026hnu/reposcore-cs.git
-cd reposcore-cs
-```
-
-### 3. 빌드
+### 빌드
 
 ```bash
 dotnet build
 ```
 
-### 4. 실행
+### 실행
 
 특정 GitHub 저장소를 분석하려면 저장소 경로(`owner/repo`)를 인수로 전달합니다.
 
@@ -47,7 +32,7 @@ dotnet run -- oss2026hnu/reposcore-cs --token YOUR_GITHUB_TOKEN
 dotnet run -- --help
 ```
 
-### 5. 사용법
+## Synopsis
 
 ```text
 Usage: reposcore-cs <repo> [[--token <String>]]
@@ -62,6 +47,7 @@ Options:
 ```
 
 > 현재 개발 진행 중으로 상세 분석 기능은 순차적으로 업데이트될 예정입니다.
+
 
 ## GitHub Markdown 문서(확장자 `.md` 파일) 작성에 대한 표준 가이드
 
