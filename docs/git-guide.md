@@ -26,6 +26,87 @@
  - git pull origin <브랜치>: 원격 저장소의 최신 내용을 Pull(불러오기)해서 합침.
 
 ---
+### Fork한 저장소를 원본(upstream)과 동기화하기
+
+수업에서는 GitHub에서 원본 저장소를 **fork**한 뒤, 자신의 fork에서 Codespaces를 여는 방식으로 작업함.
+
+이 방식에서는 `origin`은 **내 fork 저장소**, `upstream`은 **원본(공식) 저장소**를 의미함.
+원본 저장소에 새로운 변경사항이 생겼을 때 내 Codespaces에 반영하려면 아래 두 방법 중 하나를 사용함.
+
+> ⚠️ **주의:** GitHub 웹에서 Sync Fork만 누르는 것으로는 부족함.
+> Sync Fork는 GitHub.com의 내 fork 저장소만 업데이트할 뿐, 현재 작업 중인 Codespaces 안에는 자동으로 반영되지 않음.
+> Codespaces 안에도 반영하려면 아래 추가 작업이 반드시 필요함.
+
+---
+
+#### 방법 A — GitHub 웹(Sync Fork) + Codespaces 터미널 (추천: 충돌 여부를 웹에서 먼저 확인 가능)
+
+**Step 1. GitHub 웹에서 내 fork 저장소의 `main` 페이지로 이동**
+
+**Step 2. `Sync fork` 버튼 클릭 → `Update branch` 클릭**
+- 원본 저장소의 최신 변경사항이 GitHub.com의 내 fork에 반영됨.
+- 충돌이 있으면 GitHub이 경고를 표시함. 이 경우 충돌을 해결한 뒤 진행.
+
+**Step 3. Codespaces 터미널에서 아래 명령어 실행**
+```bash
+git pull origin main
+```
+- GitHub.com의 내 fork에 반영된 내용을 Codespaces 안으로 가져옴.
+- 이 단계를 빠뜨리면 Codespaces 안의 코드는 여전히 이전 상태임.
+
+---
+
+#### 방법 B — Codespaces 터미널만으로 처리
+
+**Step 1. upstream 등록 (Codespaces를 처음 열었을 때 최초 1회만 실행)**
+
+> **코드스페이스를 내 fork에서 열었다면, `upstream`은 자동으로 등록되지 않음.**
+> 아래 명령어로 직접 등록해야 함.
+
+```bash
+git remote add upstream https://github.com/oss2026hnu/reposcore-cs.git
+```
+
+등록 후 확인:
+```bash
+git remote -v
+```
+아래와 같이 `origin`(내 fork)과 `upstream`(원본)이 모두 보이면 정상.
+```
+origin    https://github.com/내아이디/reposcore-cs.git (fetch)
+origin    https://github.com/내아이디/reposcore-cs.git (push)
+upstream  https://github.com/oss2026hnu/reposcore-cs.git (fetch)
+upstream  https://github.com/oss2026hnu/reposcore-cs.git (push)
+```
+
+**Step 2. 원본 저장소의 최신 내용 가져오기**
+```bash
+git fetch upstream
+```
+
+**Step 3. 원본의 main을 내 로컬에 반영**
+```bash
+git merge upstream/main
+```
+
+**Step 4. 내 GitHub fork에도 반영**
+```bash
+git push 
+```
+
+
+---
+
+#### 두 방법 비교
+
+| | 방법 A (Sync Fork + pull) | 방법 B (터미널만) |
+|---|---|---|
+| 충돌 확인 | GitHub 웹에서 시각적으로 확인 가능 | 터미널 메시지로 확인 |
+| upstream 등록 | 불필요 | 최초 1회 필요 |
+| 단계 수 | 적음 | 많음 |
+| 추천 상황 | 처음 사용하거나 충돌이 걱정될 때 | 터미널 작업에 익숙할 때 |
+
+---
 ## git 표준 구성 요소
   협업과 배포를 위해 깃허브 저장소에 기본적으로 갖추어야 할 구성 파일 정리
 
