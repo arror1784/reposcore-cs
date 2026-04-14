@@ -48,9 +48,5 @@ Options:
 
 > 현재 개발 진행 중으로 상세 분석 기능은 순차적으로 업데이트될 예정입니다.
 
-
-## GitHub Markdown 문서(확장자 `.md` 파일) 작성에 대한 표준 가이드
-
 ## 참고자료
-
 - GitHub Markdown (확장자 .md 파일) [기본 서식 구문](https://docs.github.com/ko/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax)
