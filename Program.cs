@@ -61,7 +61,6 @@ app.AddCommand(async (
 
         Console.WriteLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
 
-        // 기여자 목록을 순회하며 점수 산출
         foreach (var user in contributors)
         {
             int totalPrs = await service.GetPullRequestCountAsync(user);
