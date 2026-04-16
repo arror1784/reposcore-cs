@@ -17,13 +17,14 @@ namespace RepoScore.Services
         private readonly string _owner;
         private readonly string _repo;
         private readonly string _token;
+        private readonly string[] _claimKeywords;
 
         private static readonly HttpClient s_httpClient = new()
         {
             BaseAddress = new Uri("https://api.github.com/")
         };
 
-        private static readonly string[] s_claimKeywords =
+        private static readonly string[] s_defaultClaimKeywords =
             ["제가 하겠습니다", "진행하겠습니다", "할게요", "I'll take this"];
 
         // 작업 유형별 기한 (이슈 제목 키워드 기반 추론)
@@ -36,11 +37,15 @@ namespace RepoScore.Services
             s_httpClient.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         }
 
-        public GitHubService(string owner, string repo, string token)
+        public GitHubService(string owner, string repo, string token,
+            string[]? claimKeywords = null)
         {
             _owner = owner;
-            _repo = repo;
+            _repo  = repo;
             _token = token ?? throw new ArgumentNullException(nameof(token));
+            _claimKeywords = (claimKeywords is { Length: > 0 })
+                ? claimKeywords
+                : s_defaultClaimKeywords;
 
             _connection = new Octokit.GraphQL.Connection(
                 new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"),
@@ -95,14 +100,11 @@ namespace RepoScore.Services
         // 이슈 번호로 연결된 오픈 PR 존재 여부 확인
         private async Task<bool> HasLinkedPullRequestAsync(int issueNumber)
         {
-            // GitHub REST API: 이슈에 연결된 타임라인 이벤트에서 cross-referenced PR 확인
-            // 또는 Search API로 해당 이슈를 닫는 PR 조회
             var url = $"repos/{_owner}/{_repo}/issues/{issueNumber}/timeline";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
-            // timeline API에는 preview 헤더 필요
             request.Headers.Accept.ParseAdd("application/vnd.github.mockingbird-preview+json");
 
             HttpResponseMessage response;
@@ -140,7 +142,6 @@ namespace RepoScore.Services
                     if (!evt.TryGetProperty("event", out var evtType))
                         continue;
 
-                    // "cross-referenced" 이벤트 중 PR이 이슈를 closes 하는 경우
                     if (evtType.GetString() == "cross-referenced"
                         && evt.TryGetProperty("source", out var source)
                         && source.TryGetProperty("type", out var sourceType)
@@ -175,11 +176,19 @@ namespace RepoScore.Services
         // 최근 이슈 선점 현황 조회
         public async Task ShowRecentClaimsAsync()
         {
+            // 각 키워드를 큰따옴표로 감싸 OR 연결 → GitHub Search의 문자열 LIKE 역할
+            var keywordFilter = string.Join(" OR ",
+                _claimKeywords.Select(k => $"\"{k}\""));
+
+            // in:comments 로 댓글 본문까지 서버 측에서 검색하여 후보 이슈를 좁힘
+            var searchQuery =
+                $"repo:{_owner}/{_repo} is:issue is:open in:comments {keywordFilter}";
+
             const string graphQL = @"
-                query($owner: String!, $name: String!) {
-                  repository(owner: $owner, name: $name) {
-                    issues(first: 20, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
-                      nodes {
+                query($searchQuery: String!) {
+                  search(query: $searchQuery, type: ISSUE, first: 20) {
+                    nodes {
+                      ... on Issue {
                         number
                         title
                         url
@@ -201,7 +210,7 @@ namespace RepoScore.Services
             var requestBody = new
             {
                 query = graphQL,
-                variables = new { owner = _owner, name = _repo }
+                variables = new { searchQuery }
             };
 
             var content = new StringContent(
@@ -277,21 +286,15 @@ namespace RepoScore.Services
                     return;
                 }
 
-                if (!data.TryGetProperty("repository", out var repository))
+                if (!data.TryGetProperty("search", out var search))
                 {
-                    Console.WriteLine("GitHub 응답에 repository 필드가 없습니다.");
+                    Console.WriteLine("GitHub 응답에 search 필드가 없습니다.");
                     return;
                 }
 
-                if (!repository.TryGetProperty("issues", out var issues))
+                if (!search.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
                 {
-                    Console.WriteLine("GitHub 응답에 issues 필드가 없습니다.");
-                    return;
-                }
-
-                if (!issues.TryGetProperty("nodes", out var nodes) || nodes.ValueKind != JsonValueKind.Array)
-                {
-                    Console.WriteLine("GitHub 응답에 issues.nodes 필드가 없습니다.");
+                    Console.WriteLine("GitHub 응답에 search.nodes 필드가 없습니다.");
                     return;
                 }
 
@@ -307,7 +310,6 @@ namespace RepoScore.Services
 
                     var issueUrl = urlProperty.GetString() ?? string.Empty;
 
-                    // 이슈 번호 및 제목 추출
                     var issueNumber = issue.TryGetProperty("number", out var numProp)
                         ? numProp.GetInt32()
                         : 0;
@@ -346,21 +348,19 @@ namespace RepoScore.Services
                             ? loginProperty.GetString()
                             : "unknown";
 
-                        if (!s_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                        // 클라이언트 측 정확한 키워드 매칭 (서버 검색의 오탐 방지)
+                        if (!_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
                             continue;
 
                         foundAny = true;
 
-                        // 작업 유형에 따른 기한 결정
                         bool isDoc = IsDocumentTask(issueTitle);
                         double deadlineHours = isDoc ? 24.0 : 48.0;
                         var deadline = claimedAt.AddHours(deadlineHours);
                         var remaining = deadline - now;
 
-                        // PR 연결 여부 확인
                         bool hasPr = issueNumber > 0 && await HasLinkedPullRequestAsync(issueNumber);
 
-                        // 출력
                         Console.WriteLine($"👤 {login}");
                         Console.WriteLine($" - {issueUrl}");
 
