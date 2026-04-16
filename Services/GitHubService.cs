@@ -173,7 +173,7 @@ namespace RepoScore.Services
         }
 
         // 최근 이슈 선점 현황 조회
-        public async Task ShowRecentClaimsAsync()
+        public async Task ShowRecentClaimsAsync(string mode = "issue")
         {
             const string graphQL = @"
                 query($owner: String!, $name: String!) {
@@ -298,7 +298,7 @@ namespace RepoScore.Services
                 var now = DateTimeOffset.UtcNow;
                 Console.WriteLine("📌 최근 이슈 선점 현황\n");
 
-                bool foundAny = false;
+                var claimMap = new Dictionary<string, List<(string Url, bool HasPr, TimeSpan Remaining)>>();
 
                 foreach (var issue in nodes.EnumerateArray())
                 {
@@ -343,13 +343,11 @@ namespace RepoScore.Services
                             continue;
 
                         var login = author.TryGetProperty("login", out var loginProperty) && loginProperty.ValueKind == JsonValueKind.String
-                            ? loginProperty.GetString()
+                            ? loginProperty.GetString() ?? "unknown"
                             : "unknown";
 
                         if (!s_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
                             continue;
-
-                        foundAny = true;
 
                         // 작업 유형에 따른 기한 결정
                         bool isDoc = IsDocumentTask(issueTitle);
@@ -360,27 +358,67 @@ namespace RepoScore.Services
                         // PR 연결 여부 확인
                         bool hasPr = issueNumber > 0 && await HasLinkedPullRequestAsync(issueNumber);
 
-                        // 출력
-                        Console.WriteLine($"👤 {login}");
-                        Console.WriteLine($" - {issueUrl}");
-
-                        if (hasPr)
-                        {
-                            Console.WriteLine($" - ✅ PR 생성됨");
-                        }
-                        else
-                        {
-                            Console.WriteLine($" - {FormatRemainingTime(remaining)}");
-                        }
-
-                        Console.WriteLine();
+                        // 유저별 딕셔너리에 수집
+                        if (!claimMap.ContainsKey(login))
+                            claimMap[login] = new List<(string, bool, TimeSpan)>();
+                        claimMap[login].Add((issueUrl, hasPr, remaining));
                         break;
                     }
                 }
 
-                if (!foundAny)
+                // 출력
+                if (claimMap.Count == 0)
                 {
                     Console.WriteLine("최근 48시간 내 선점된 이슈가 없습니다.");
+                }
+                else if (mode == "user")
+                {
+                    foreach (var (login, claims) in claimMap)
+                    {
+                        Console.WriteLine($"👤 {login}");
+                        foreach (var (url, hasPr, remaining) in claims)
+                        {
+                            Console.WriteLine($" - {url}");
+                            if (hasPr)
+                                Console.WriteLine($"   ✅ PR 생성됨");
+                            else
+                                Console.WriteLine($"   {FormatRemainingTime(remaining)}");
+                        }
+                    }
+                }
+                else
+                {
+                    var claimedUrls = new HashSet<string>(
+                        claimMap.Values.SelectMany(c => c.Select(x => x.Url)));
+
+                    var unclaimedIssues = new List<string>();
+                    foreach (var issue in nodes.EnumerateArray())
+                    {
+                        if (!issue.TryGetProperty("url", out var u) || u.ValueKind != JsonValueKind.String)
+                            continue;
+                        var url = u.GetString() ?? "";
+                        if (!claimedUrls.Contains(url))
+                            unclaimedIssues.Add(url);
+                    }
+
+                    Console.WriteLine("📋 미선점 이슈");
+                    foreach (var url in unclaimedIssues)
+                        Console.WriteLine($" - {url}");
+                    Console.WriteLine();
+
+                    Console.WriteLine("📌 선점된 이슈");
+                    foreach (var (login, claims) in claimMap)
+                    {
+                        Console.WriteLine($"👤 {login}");
+                        foreach (var (url, hasPr, remaining) in claims)
+                        {
+                            Console.WriteLine($" - {url}");
+                            if (hasPr)
+                                Console.WriteLine($"   ✅ PR 생성됨");
+                            else
+                                Console.WriteLine($"   {FormatRemainingTime(remaining)}");
+                        }
+                    }
                 }
             }
         }

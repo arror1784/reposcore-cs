@@ -10,7 +10,7 @@ var app = CoconaApp.Create();
 app.AddCommand(async (
     [Argument(Description = "대상 저장소 (예: owner/repo)")] string repo,
     [Option('t', Description = "GitHub Personal Access Token (미입력 시 환경변수 GITHUB_TOKEN 사용)")] string? token = null,
-    [Option("show-claims", Description = "최근 이슈 선점 현황 조회")] bool showClaims = false
+    [Option("show-claims", Description = "최근 이슈 선점 현황 조회 (issue|user, 기본값: issue)")] string? showClaims = null
 ) =>
 {
     // 1. 토큰 처리
@@ -36,10 +36,12 @@ app.AddCommand(async (
     var service = new GitHubService(ownerName, repoName, token);
 
     // 3. 이슈 선점 현황 조회 모드 (--show-claims)
-    if (showClaims)
+    if (showClaims != null)
     {
         Console.WriteLine($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
-        await service.ShowRecentClaimsAsync();
+        var mode = string.IsNullOrEmpty(showClaims) ? "issue" : showClaims;
+
+        await service.ShowRecentClaimsAsync(mode);
         return;
     }
 
