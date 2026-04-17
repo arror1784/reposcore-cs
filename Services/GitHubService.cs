@@ -26,6 +26,7 @@ namespace RepoScore.Services
         private static readonly string[] s_claimKeywords =
             ["제가 하겠습니다", "진행하겠습니다", "할게요", "I'll take this"];
 
+
         // 작업 유형별 기한 (이슈 제목 키워드 기반 추론)
         private static readonly string[] s_docKeywords =
             ["doc", "docs", "문서", "readme", "guide", "typo", "오타"];
@@ -49,7 +50,7 @@ namespace RepoScore.Services
         }
 
         // PR 개수
-        public async Task<int> GetPullRequestCountAsync(string authorLogin)
+        public int GetPullRequestCount(string authorLogin)
         {
             var query =
                 new Query()
@@ -59,11 +60,11 @@ namespace RepoScore.Services
                     first: 1)
                 .Select(x => x.IssueCount);
 
-            return await _connection.Run(query);
+            return _connection.Run(query).Result;
         }
 
         // Issue 개수
-        public async Task<int> GetIssueCountAsync(string authorLogin)
+        public int GetIssueCount(string authorLogin)
         {
             var query =
                 new Query()
@@ -73,11 +74,11 @@ namespace RepoScore.Services
                     first: 1)
                 .Select(x => x.IssueCount);
 
-            return await _connection.Run(query);
+            return _connection.Run(query).Result;
         }
 
         // PR 댓글
-        public async Task<List<string>> GetPullRequestCommentsAsync(int prNumber)
+        public List<string> GetPullRequestComments(int prNumber)
         {
             var query =
                 new Query()
@@ -87,13 +88,14 @@ namespace RepoScore.Services
                 .Nodes
                 .Select(c => c.Body);
 
-            var result = await _connection.Run(query);
+            // 동기 실행
+            var result = _connection.Run(query).Result;
 
             return new List<string>(result);
         }
 
         // 이슈 번호로 연결된 오픈 PR 존재 여부 확인
-        private async Task<bool> HasLinkedPullRequestAsync(int issueNumber)
+        private bool HasLinkedPullRequest(int issueNumber)
         {
             // GitHub REST API: 이슈에 연결된 타임라인 이벤트에서 cross-referenced PR 확인
             // 또는 Search API로 해당 이슈를 닫는 PR 조회
@@ -108,7 +110,8 @@ namespace RepoScore.Services
             HttpResponseMessage response;
             try
             {
-                response = await s_httpClient.SendAsync(request);
+                // 동기 HTTP 요청
+                response = s_httpClient.Send(request);
             }
             catch
             {
@@ -118,7 +121,11 @@ namespace RepoScore.Services
             if (!response.IsSuccessStatusCode)
                 return false;
 
-            var body = await response.Content.ReadAsStringAsync();
+            // 동기 문자열 읽기 - Stream 사용
+            using var stream = response.Content.ReadAsStream();
+            using var reader = new StreamReader(stream);
+            var body = reader.ReadToEnd();
+
             JsonDocument document;
             try
             {
@@ -172,8 +179,8 @@ namespace RepoScore.Services
             return $"⏳ 남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
         }
 
-        // 최근 이슈 선점 현황 조회
-        public async Task ShowRecentClaimsAsync(string mode = "issue")
+        // 최근 이슈 선점 현황 조회 (동기 버전)
+        public void ShowRecentClaims(string mode = "issue")
         {
             const string graphQL = @"
                 query($owner: String!, $name: String!) {
@@ -219,7 +226,7 @@ namespace RepoScore.Services
             HttpResponseMessage response;
             try
             {
-                response = await s_httpClient.SendAsync(request);
+                response = s_httpClient.Send(request);
             }
             catch (Exception ex)
             {
@@ -229,8 +236,12 @@ namespace RepoScore.Services
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorText = await response.Content.ReadAsStringAsync();
+                using var errorStream = response.Content.ReadAsStream();
+                using var errorReader = new StreamReader(errorStream);
+                var errorText = errorReader.ReadToEnd();
+                
                 Console.WriteLine($"GitHub API 요청 실패: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+                
                 if (!string.IsNullOrWhiteSpace(errorText))
                 {
                     Console.WriteLine("응답 본문:");
@@ -239,7 +250,10 @@ namespace RepoScore.Services
                 return;
             }
 
-            var body = await response.Content.ReadAsStringAsync();
+            using var stream = response.Content.ReadAsStream();
+            using var reader = new StreamReader(stream);
+            var body = reader.ReadToEnd();
+
             JsonDocument document;
             try
             {
@@ -356,7 +370,7 @@ namespace RepoScore.Services
                         var remaining = deadline - now;
 
                         // PR 연결 여부 확인
-                        bool hasPr = issueNumber > 0 && await HasLinkedPullRequestAsync(issueNumber);
+                        bool hasPr = issueNumber > 0 && HasLinkedPullRequest(issueNumber);
 
                         // 유저별 딕셔너리에 수집
                         if (!claimMap.ContainsKey(login))
@@ -424,19 +438,22 @@ namespace RepoScore.Services
         }
 
         // 모든 기여자의 GitHub ID 목록을 가져오는 메서드
-        public async Task<List<string>> GetAllContributorsAsync()
+        public List<string> GetAllContributors()
         {
             var request = new HttpRequestMessage(HttpMethod.Get, $"repos/{_owner}/{_repo}/contributors");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
 
-            var response = await s_httpClient.SendAsync(request);
+            var response = s_httpClient.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 Console.WriteLine($"기여자 목록 조회 실패: HTTP {(int)response.StatusCode}");
                 return new List<string>();
             }
 
-            var json = await response.Content.ReadAsStringAsync();
+            Stream stream = response.Content.ReadAsStream();
+            StreamReader reader = new StreamReader(stream);
+            string json = reader.ReadToEnd();
+
             using var document = JsonDocument.Parse(json);
 
             var contributors = new List<string>();

@@ -7,7 +7,7 @@ using RepoScore.Services;
 
 var app = CoconaApp.Create();
 
-app.AddCommand(async (
+app.AddCommand ((
     [Argument(Description = "대상 저장소 (예: owner/repo)")] string repo,
     [Option('t', Description = "GitHub Personal Access Token (미입력 시 환경변수 GITHUB_TOKEN 사용)")] string? token = null,
     [Option("show-claims", Description = "최근 이슈 선점 현황 조회 (issue|user, 기본값: issue)")] string? showClaims = null
@@ -41,7 +41,7 @@ app.AddCommand(async (
         Console.WriteLine($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
         var mode = string.IsNullOrEmpty(showClaims) ? "issue" : showClaims;
 
-        await service.ShowRecentClaimsAsync(mode);
+        service.ShowRecentClaims(mode);
         return;
     }
 
@@ -53,7 +53,7 @@ app.AddCommand(async (
     try
     {
         // 전체 기여자 목록 조회
-        List<string> contributors = await service.GetAllContributorsAsync();
+        List<string> contributors = service.GetAllContributors();
 
         if (contributors.Count == 0)
         {
@@ -65,8 +65,8 @@ app.AddCommand(async (
 
         foreach (var user in contributors)
         {
-            int totalPrs = await service.GetPullRequestCountAsync(user);
-            int totalIssues = await service.GetIssueCountAsync(user);
+            int totalPrs = service.GetPullRequestCount(user);
+            int totalIssues = service.GetIssueCount(user);
 
             int finalScore = ScoreCalculator.CalculateFinalScore(
                 featureBugPrCount: totalPrs,
