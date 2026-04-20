@@ -45,15 +45,23 @@ app.AddCommand((
         List<string> contributors = service.GetAllContributors();
         if (contributors.Count == 0) { Console.WriteLine("조회된 기여자가 없습니다."); return; }
 
-        var reportData = new List<(string Id, int Issues, int Prs, int Score)>();
+        var reportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>();
 
         foreach (var user in contributors)
         {
-            int totalPrs = service.GetPullRequestCount(user);
-            int totalIssues = service.GetIssueCount(user);
-            int finalScore = ScoreCalculator.CalculateFinalScore(totalPrs, 0, 0, totalIssues, 0);
+            var claims = service.GetClaims(user);
+            var prs = service.GetPullRequests(user);
+            
+            var featureBugPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
+            var docPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
+            var typoPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
+            var featureBugIssues = claims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
+            var docIssues = claims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
 
-            reportData.Add((user, totalIssues, totalPrs, finalScore));
+            int finalScore 
+                = ScoreCalculator.CalculateFinalScore(featureBugPrs.Count, docPrs.Count, typoPrs.Count, featureBugIssues.Count, docIssues.Count);
+
+            reportData.Add((user, docIssues.Count, featureBugIssues.Count, typoPrs.Count, docPrs.Count, featureBugPrs.Count, finalScore));
         }
 
         // 4. 출력 방식 분기 처리 및 파일 저장
@@ -62,7 +70,7 @@ app.AddCommand((
         // CSV 데이터 파일 생성
         var csv = new StringBuilder();
         csv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-        foreach (var r in reportData) csv.AppendLine($"{r.Id}, 0, {r.Issues}, 0, 0, {r.Prs}, {r.Score}");
+        foreach (var r in reportData) csv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
 
         string csvPath = Path.Combine(outputDir, "results.csv");
         File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
@@ -78,7 +86,7 @@ app.AddCommand((
             foreach (var r in reportData)
             {
                 txt.AppendLine($"👤 유저: {r.Id}");
-                txt.AppendLine($"   - 이슈 처리: {r.Issues}회 / PR 제출: {r.Prs}회");
+                txt.AppendLine($"   - 이슈 처리: {r.docIssues + r.featBugIssues}회 / PR 제출: {r.typoPrs + r.docPrs + r.featBugPrs}회");
                 txt.AppendLine($"   - 🏆 최종 기여 점수: {r.Score}점");
                 txt.AppendLine(new string('-', 50));
             }
@@ -113,6 +121,10 @@ static void PrintClaimsReport(ClaimsData data, string mode)
             foreach (var claim in claims)
             {
                 Console.WriteLine($" - {claim.Url}");
+                if (claim.Labels.Count > 0)
+                {
+                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
+                }
                 Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
             }
         }
@@ -128,6 +140,10 @@ static void PrintClaimsReport(ClaimsData data, string mode)
             foreach (var claim in claims)
             {
                 Console.WriteLine($" - {claim.Url}");
+                if (claim.Labels.Count > 0)
+                {
+                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
+                }
                 Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
             }
         }

@@ -10,18 +10,51 @@ using Octokit.GraphQL.Model;
 
 namespace RepoScore.Services
 {
+    public enum GitHubIssuePrLabel
+    {
+        None,           // No labels
+        Bug,
+        Documentation,
+        Duplicate,
+        Enhancement,
+        GoodFirstIssue, // good first issue
+        HelpWanted,     // help wanted
+        Invalid,
+        Pinned,
+        Question,
+        Typo,
+        Wontfix
+    }
+
     // 구조화된 반환을 위한 데이터 모델
     public class ClaimRecord
     {
+        public int Number { get; set; }
         public string Url { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
         public bool HasPr { get; set; }
         public TimeSpan Remaining { get; set; }
+        public List<GitHubIssuePrLabel> Labels { get; set; } = new List<GitHubIssuePrLabel>();
     }
 
     public class ClaimsData
     {
         public Dictionary<string, List<ClaimRecord>> ClaimedMap { get; set; } = new();
         public List<string> UnclaimedUrls { get; set; } = new();
+    }
+
+    public class PRRecord
+    {
+        public int Number { get; set; }
+        public string Url { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public List<GitHubIssuePrLabel> Labels { get; set; } = new List<GitHubIssuePrLabel>();
+    }
+
+    public class PRData
+    {
+        public Dictionary<string, List<PRRecord>> PullRequestsByAuthor { get; set; } = new();
+        public List<string> AllUrls { get; set; } = new();
     }
 
     public class GitHubService
@@ -37,7 +70,6 @@ namespace RepoScore.Services
         };
 
         private static readonly string[] s_claimKeywords = ["제가 하겠습니다", "진행하겠습니다", "할게요", "I'll take this"];
-        private static readonly string[] s_docKeywords = ["doc", "docs", "문서", "readme", "guide", "typo", "오타"];
 
         static GitHubService()
         {
@@ -54,16 +86,142 @@ namespace RepoScore.Services
             _connection = new Connection(new ProductHeaderValue("reposcore-cs"), token);
         }
 
-        public int GetPullRequestCount(string authorLogin)
+        public List<PRRecord> GetPullRequests(string authorLogin)
         {
-            var query = new Query().Search(query: $"repo:{_owner}/{_repo} is:pr author:{authorLogin}", type: SearchType.Issue, first: 1).Select(x => x.IssueCount);
-            return _connection.Run(query).Result;
+            const string graphQL = @"
+                query($query: String!) {
+                  search(query: $query, type: ISSUE, first: 50) {
+                    nodes {
+                      ... on PullRequest {
+                        number
+                        title
+                        url
+                        labels(first: 10) {
+                          nodes { name }
+                        }
+                      }
+                    }
+                  }
+                }";
+
+            var requestBody = new { query = graphQL, variables = new { query = $"repo:{_owner}/{_repo} is:pr author:{authorLogin}" } };
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "graphql") { Content = content };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+
+            using var response = s_httpClient.Send(request);
+            if (!response.IsSuccessStatusCode) throw new Exception($"API 요청 실패: {response.StatusCode}");
+
+            using var stream = response.Content.ReadAsStream();
+            using var reader = new StreamReader(stream);
+            using var document = JsonDocument.Parse(reader.ReadToEnd());
+
+            var root = document.RootElement;
+            if (root.TryGetProperty("errors", out var errors)) throw new Exception("GraphQL 오류가 발생했습니다.");
+
+            var nodes = root.GetProperty("data").GetProperty("search").GetProperty("nodes");
+            var prRecords = new List<PRRecord>();
+
+            foreach (var node in nodes.EnumerateArray())
+            {
+                if (!node.TryGetProperty("number", out var numberProp)) continue;
+                var prNumber = numberProp.GetInt32();
+                var prTitle = node.GetProperty("title").GetString() ?? string.Empty;
+                var prUrl = node.GetProperty("url").GetString() ?? string.Empty;
+                var prLabels = new List<GitHubIssuePrLabel>();
+
+                if (node.TryGetProperty("labels", out var labelsProp) && labelsProp.TryGetProperty("nodes", out var labelNodes))
+                {
+                    foreach (var labelNode in labelNodes.EnumerateArray())
+                    {
+                        if (labelNode.TryGetProperty("name", out var nameProp))
+                        {
+                            var label = ParseGitHubLabel(nameProp.GetString() ?? string.Empty);
+                            if (label != GitHubIssuePrLabel.None) prLabels.Add(label);
+                        }
+                    }
+                }
+
+                prRecords.Add(new PRRecord
+                {
+                    Number = prNumber,
+                    Title = prTitle,
+                    Url = prUrl,
+                    Labels = prLabels
+                });
+            }
+
+            return prRecords;
         }
 
-        public int GetIssueCount(string authorLogin)
+        public List<ClaimRecord> GetClaims(string authorLogin)
         {
-            var query = new Query().Search(query: $"repo:{_owner}/{_repo} is:issue author:{authorLogin}", type: SearchType.Issue, first: 1).Select(x => x.IssueCount);
-            return _connection.Run(query).Result;
+            const string graphQL = @"
+                query($query: String!) {
+                  search(query: $query, type: ISSUE, first: 50) {
+                    nodes {
+                      ... on Issue {
+                        number
+                        title
+                        url
+                        labels(first: 10) {
+                          nodes { name }
+                        }
+                      }
+                    }
+                  }
+                }";
+
+            var requestBody = new { query = graphQL, variables = new { query = $"repo:{_owner}/{_repo} is:issue author:{authorLogin}" } };
+            var content = new StringContent(JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "graphql") { Content = content };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
+
+            using var response = s_httpClient.Send(request);
+            if (!response.IsSuccessStatusCode) throw new Exception($"API 요청 실패: {response.StatusCode}");
+
+            using var stream = response.Content.ReadAsStream();
+            using var reader = new StreamReader(stream);
+            using var document = JsonDocument.Parse(reader.ReadToEnd());
+
+            var root = document.RootElement;
+            if (root.TryGetProperty("errors", out var errors)) throw new Exception("GraphQL 오류가 발생했습니다.");
+
+            var nodes = root.GetProperty("data").GetProperty("search").GetProperty("nodes");
+            var claimRecords = new List<ClaimRecord>();
+
+            foreach (var node in nodes.EnumerateArray())
+            {
+                if (!node.TryGetProperty("number", out var numberProp)) continue;
+                var claimNumber = numberProp.GetInt32();
+                var claimTitle = node.GetProperty("title").GetString() ?? string.Empty;
+                var claimUrl = node.GetProperty("url").GetString() ?? string.Empty;
+                var claimLabels = new List<GitHubIssuePrLabel>();
+
+                if (node.TryGetProperty("labels", out var labelsProp) && labelsProp.TryGetProperty("nodes", out var labelNodes))
+                {
+                    foreach (var labelNode in labelNodes.EnumerateArray())
+                    {
+                        if (labelNode.TryGetProperty("name", out var nameProp))
+                        {
+                            var label = ParseGitHubLabel(nameProp.GetString() ?? string.Empty);
+                            if (label != GitHubIssuePrLabel.None) claimLabels.Add(label);
+                        }
+                    }
+                }
+
+                claimRecords.Add(new ClaimRecord
+                {
+                    Number = claimNumber,
+                    Title = claimTitle,
+                    Url = claimUrl,
+                    Labels = claimLabels
+                });
+            }
+
+            return claimRecords;
         }
 
         public List<string> GetPullRequestComments(int prNumber)
@@ -108,10 +266,32 @@ namespace RepoScore.Services
             catch { return false; }
         }
 
-        private static bool IsDocumentTask(string issueTitle)
+        private static bool IsDocumentTask(List<GitHubIssuePrLabel> issueLabels)
         {
-            var lower = issueTitle.ToLowerInvariant();
-            return s_docKeywords.Any(k => lower.Contains(k));
+            return issueLabels.Contains(GitHubIssuePrLabel.Documentation) || issueLabels.Contains(GitHubIssuePrLabel.Typo);
+        }
+
+        private static GitHubIssuePrLabel ParseGitHubLabel(string labelName)
+        {
+            if (string.IsNullOrEmpty(labelName)) return GitHubIssuePrLabel.None;
+
+            var normalized = labelName.ToLowerInvariant().Replace(" ", "").Replace("-", "");
+            switch (normalized)
+            {
+                case "bug": return GitHubIssuePrLabel.Bug;
+                case "documentation": return GitHubIssuePrLabel.Documentation;
+                case "duplicate": return GitHubIssuePrLabel.Duplicate;
+                case "enhancement": return GitHubIssuePrLabel.Enhancement;
+                case "good first issue": return GitHubIssuePrLabel.GoodFirstIssue;
+                case "help wanted": return GitHubIssuePrLabel.HelpWanted;
+                case "invalid": return GitHubIssuePrLabel.Invalid;
+                case "pinned": return GitHubIssuePrLabel.Pinned;
+                case "question": return GitHubIssuePrLabel.Question;
+                case "typo": return GitHubIssuePrLabel.Typo;
+                case "wontfix": return GitHubIssuePrLabel.Wontfix;
+                case "nolabels": return GitHubIssuePrLabel.None;
+                default: return GitHubIssuePrLabel.None;
+            }
         }
 
         // 콘솔 출력 없이 구조화된 ClaimsData를 반환하도록 변경
@@ -121,7 +301,7 @@ namespace RepoScore.Services
                 query($owner: String!, $name: String!) {
                   repository(owner: $owner, name: $name) {
                     issues(first: 20, states: OPEN, orderBy: { field: CREATED_AT, direction: DESC }) {
-                      nodes { number, title, url, comments(first: 10) { nodes { body, createdAt, author { login } } } }
+                      nodes { number, title, url, labels(first: 10) { nodes { name } }, comments(first: 10) { nodes { body, createdAt, author { login } } } }
                     }
                   }
                 }";
@@ -150,8 +330,25 @@ namespace RepoScore.Services
             {
                 var issueUrl = issue.GetProperty("url").GetString() ?? "";
                 var issueNumber = issue.GetProperty("number").GetInt32();
-                var issueTitle = issue.GetProperty("title").GetString() ?? "";
+                var issueLabels = new List<GitHubIssuePrLabel>();
                 var isClaimed = false;
+
+                // 라벨 정보 추출
+                if (issue.TryGetProperty("labels", out var labelsProp) && labelsProp.TryGetProperty("nodes", out var labelNodes))
+                {
+                    foreach (var labelNode in labelNodes.EnumerateArray())
+                    {
+                        if (labelNode.TryGetProperty("name", out var nameProp))
+                        {
+                            var labelName = nameProp.GetString() ?? "";
+                            var label = ParseGitHubLabel(labelName);
+                            if (label != GitHubIssuePrLabel.None)
+                            {
+                                issueLabels.Add(label);
+                            }
+                        }
+                    }
+                }
 
                 foreach (var comment in issue.GetProperty("comments").GetProperty("nodes").EnumerateArray())
                 {
@@ -163,12 +360,12 @@ namespace RepoScore.Services
 
                     if (s_claimKeywords.Any(k => commentBody.Contains(k, StringComparison.OrdinalIgnoreCase)))
                     {
-                        var deadlineHours = IsDocumentTask(issueTitle) ? 24.0 : 48.0;
+                        var deadlineHours = IsDocumentTask(issueLabels) ? 24.0 : 48.0;
                         var remaining = claimedAt.AddHours(deadlineHours) - now;
                         var hasPr = issueNumber > 0 && HasLinkedPullRequest(issueNumber);
 
                         if (!claimsData.ClaimedMap.ContainsKey(login)) claimsData.ClaimedMap[login] = new List<ClaimRecord>();
-                        claimsData.ClaimedMap[login].Add(new ClaimRecord { Url = issueUrl, HasPr = hasPr, Remaining = remaining });
+                        claimsData.ClaimedMap[login].Add(new ClaimRecord { Url = issueUrl, HasPr = hasPr, Remaining = remaining, Labels = issueLabels });
                         isClaimed = true;
                         break;
                     }
