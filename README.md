@@ -25,10 +25,10 @@ dotnet run -- oss2026hnu/reposcore-cs
 # 개인 액세스 토큰(PAT) 사용 예시
 dotnet run -- oss2026hnu/reposcore-cs --token YOUR_GITHUB_TOKEN
 
-# 최근 이슈 선점 현황 조회 예시
-dotnet run -- oss2026hnu/reposcore-cs --show-claims              # 이슈별 (기본값)
-dotnet run -- oss2026hnu/reposcore-cs --show-claims=issue        # 이슈별 (명시)
-dotnet run -- oss2026hnu/reposcore-cs --show-claims=user         # 유저별
+# 최근 이슈 선점 현황 조회 예시 (토큰 정보 필수)
+dotnet run -- oss2026hnu/reposcore-cs --show-claims= --token YOUR_GITHUB_TOKEN      # 이슈별 (기본값)
+dotnet run -- oss2026hnu/reposcore-cs --show-claims=issue --token YOUR_GITHUB_TOKEN # 이슈별 (명시)
+dotnet run -- oss2026hnu/reposcore-cs --show-claims=user --token YOUR_GITHUB_TOKEN  # 유저별
 
 # 도움말 출력 (모든 인수 및 옵션 확인)
 dotnet run -- --help
