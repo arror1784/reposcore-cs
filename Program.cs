@@ -51,9 +51,12 @@ app.AddCommand((
 
         foreach (var user in contributors)
         {
-            var claims = service.GetClaims(user);
-            var prs = service.GetPullRequests(user);
 
+            // 이슈 중 NotPlanned 또는 Duplicate인 경우 제외 
+            var claims = service.GetClaims(user).Where(c => c.ClosedReason != IssueClosedStateReason.NotPlanned && c.ClosedReason != IssueClosedStateReason.Duplicate).ToList();
+            // PR 중 병합된 경우만 포함
+            var prs = service.GetPullRequests(user).Where(p => p.IsMerged).ToList();
+            
             var featureBugPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
             var docPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
             var typoPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
@@ -84,20 +87,9 @@ app.AddCommand((
         // txt 파일 생성
         if (format.ToLower() == "txt")
         {
-            var txt = new StringBuilder();
-            txt.AppendLine($"=== {repo} 오픈소스 기여도 분석 리포트 ===");
-            txt.AppendLine($"분석 일시: {DateTime.Now:yyyy-MM-dd HH:mm}");
-            txt.AppendLine(new string('-', 50));
-            foreach (var r in reportData)
-            {
-                txt.AppendLine($"👤 유저: {r.Id}");
-                txt.AppendLine($"   - 이슈 처리: {r.docIssues + r.featBugIssues}회 / PR 제출: {r.typoPrs + r.docPrs + r.featBugPrs}회");
-                txt.AppendLine($"   - 🏆 최종 기여 점수: {r.Score}점");
-                txt.AppendLine(new string('-', 50));
-            }
-
             string txtPath = Path.Combine(outputDir, "results.txt");
-            File.WriteAllText(txtPath, txt.ToString(), Encoding.UTF8);
+            string txtContent = BuildTextReport(repo, reportData);
+            File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
             Console.WriteLine($"✅ 가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
         }
     }
@@ -110,13 +102,13 @@ app.AddCommand((
 app.Run();
 
 // 정렬 기능을 구현한 메서드
-static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> 
-SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data, 
+static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>
+SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data,
                 string sortBy, string sortOrder)
 {
     var sorted = sortBy.ToLower() switch
     {
-        "score" => sortOrder.ToLower() == "asc" 
+        "score" => sortOrder.ToLower() == "asc"
             ? data.OrderBy(x => x.Score).ToList()
             : data.OrderByDescending(x => x.Score).ToList(),
         "id" => sortOrder.ToLower() == "asc"
@@ -126,8 +118,81 @@ SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, i
             ? data.OrderBy(x => x.Score).ToList()
             : data.OrderByDescending(x => x.Score).ToList()
     };
-    
+
     return sorted;
+}
+
+static string BuildTextReport(
+    string repo,
+    List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData)
+{
+    var rows = reportData.Select(r => new
+    {
+        Id = r.Id,
+        IssuePr = $"{r.docIssues + r.featBugIssues}/{r.typoPrs + r.docPrs + r.featBugPrs}",
+        Score = r.Score.ToString()
+    }).ToList();
+
+    string userHeader = "유저";
+    string issuePrHeader = "이슈/PR";
+    string scoreHeader = "점수";
+
+    int userWidth = Math.Max(userHeader.Length, rows.Any() ? rows.Max(x => x.Id.Length) : 0);
+    int issuePrWidth = Math.Max(issuePrHeader.Length, rows.Any() ? rows.Max(x => x.IssuePr.Length) : 0);
+    int scoreWidth = Math.Max(scoreHeader.Length, rows.Any() ? rows.Max(x => x.Score.Length) : 0);
+
+    string separator =
+        new string('-', userWidth) + "-+-" +
+        new string('-', issuePrWidth) + "-+-" +
+        new string('-', scoreWidth);
+
+    var sb = new StringBuilder();
+    sb.AppendLine($"=== {repo} 오픈소스 기여도 분석 리포트 ===");
+    sb.AppendLine($"분석 일시: {DateTime.Now:yyyy-MM-dd HH:mm}");
+    sb.AppendLine();
+
+    sb.AppendLine(
+        PadRightKorean(userHeader, userWidth) + " | " +
+        PadLeft(issuePrHeader, issuePrWidth) + " | " +
+        PadLeft(scoreHeader, scoreWidth));
+
+    sb.AppendLine(separator);
+
+    foreach (var row in rows)
+    {
+        sb.AppendLine(
+            PadRightKorean(row.Id, userWidth) + " | " +
+            PadLeft(row.IssuePr, issuePrWidth) + " | " +
+            PadLeft(row.Score, scoreWidth));
+    }
+
+    return sb.ToString();
+}
+
+static string PadLeft(string text, int width)
+{
+    return text.PadLeft(width);
+}
+
+static string PadRightKorean(string text, int width)
+{
+    // 한글 헤더/영문 아이디가 섞여도 기본적인 정렬이 무너지지 않게 맞춤
+    int textWidth = GetDisplayWidth(text);
+    if (textWidth >= width) return text;
+
+    return text + new string(' ', width - textWidth);
+}
+
+static int GetDisplayWidth(string text)
+{
+    int width = 0;
+
+    foreach (char c in text)
+    {
+        width += c > 127 ? 2 : 1;
+    }
+
+    return width;
 }
 
 // 출력 전용 로직을 분리한 메서드

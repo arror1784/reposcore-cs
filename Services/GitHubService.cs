@@ -13,12 +13,22 @@ namespace RepoScore.Services
         HelpWanted, Invalid, Pinned, Question, Typo, Wontfix
     }
 
+    public enum IssueClosedStateReason
+    {
+        None,
+        Completed,
+        Duplicate,
+        NotPlanned
+    }
+
+    // 구조화된 반환을 위한 데이터 모델
     public class ClaimRecord
     {
         public int Number { get; set; }
         public string Url { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
         public bool HasPr { get; set; }
+        public IssueClosedStateReason ClosedReason { get; set; } = IssueClosedStateReason.None;
         public TimeSpan Remaining { get; set; }
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
     }
@@ -34,6 +44,7 @@ namespace RepoScore.Services
         public int Number { get; set; }
         public string Url { get; set; } = string.Empty;
         public string Title { get; set; } = string.Empty;
+        public bool IsMerged { get; set; } = false;
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
     }
 
@@ -80,6 +91,7 @@ namespace RepoScore.Services
                     pr.Number,
                     pr.Title,
                     pr.Url,
+                    pr.Merged, // main 브랜치의 IsMerged 요구사항 통합
                     Labels = pr.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList()
                 });
 
@@ -93,6 +105,7 @@ namespace RepoScore.Services
                     Number = pr.Number,
                     Title = pr.Title,
                     Url = pr.Url,
+                    IsMerged = pr.Merged,
                     Labels = pr.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
                 });
             }
@@ -111,6 +124,7 @@ namespace RepoScore.Services
                     issue.Number,
                     issue.Title,
                     issue.Url,
+                    issue.StateReason, // main 브랜치의 closedReason 요구사항 통합
                     Labels = issue.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList()
                 });
 
@@ -119,11 +133,27 @@ namespace RepoScore.Services
 
             foreach (var issue in result)
             {
+                var claimClosedReason = IssueClosedStateReason.None;
+                
+                // GraphQL 열거형 데이터를 내부 열거형 모델로 매핑
+                if (issue.StateReason.HasValue)
+                {
+                    var reasonStr = issue.StateReason.Value.ToString().ToUpperInvariant();
+                    claimClosedReason = reasonStr switch
+                    {
+                        "COMPLETED" => IssueClosedStateReason.Completed,
+                        "DUPLICATE" => IssueClosedStateReason.Duplicate,
+                        "NOTPLANNED" or "NOT_PLANNED" => IssueClosedStateReason.NotPlanned,
+                        _ => IssueClosedStateReason.None
+                    };
+                }
+
                 claimRecords.Add(new ClaimRecord
                 {
                     Number = issue.Number,
                     Title = issue.Title,
                     Url = issue.Url,
+                    ClosedReason = claimClosedReason,
                     Labels = issue.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
                 });
             }
