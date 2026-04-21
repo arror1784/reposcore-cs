@@ -13,7 +13,9 @@ app.AddCommand((
     [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)")] string? token = null,
     [Option("show-claims", Description = "최근 이슈 선점 현황 조회 (issue|user)")] string? showClaims = null,
     [Option('f', Description = "출력 형식 (csv, txt)")] string format = "csv",
-    [Option("output-dir", ['o'], Description = "출력 디렉토리 경로")] string outputDir = "./results"
+    [Option("output-dir", ['o'], Description = "출력 디렉토리 경로")] string outputDir = "./results",
+    [Option("sort-by", Description = "정렬 기준 (score | id, 기본값: score)")] string sortBy = "score",
+    [Option("sort-order", Description = "정렬 방법 (asc | desc, 기본값: desc)")] string sortOrder = "desc"
 ) =>
 {
     // 1. 토큰 및 저장소 검증
@@ -61,11 +63,14 @@ app.AddCommand((
             var featureBugIssues = claims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
             var docIssues = claims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
 
-            int finalScore 
+            int finalScore
                 = ScoreCalculator.CalculateFinalScore(featureBugPrs.Count, docPrs.Count, typoPrs.Count, featureBugIssues.Count, docIssues.Count);
 
             reportData.Add((user, docIssues.Count, featureBugIssues.Count, typoPrs.Count, docPrs.Count, featureBugPrs.Count, finalScore));
         }
+
+        // 3.5. 정렬 로직 적용
+        reportData = SortReportData(reportData, sortBy, sortOrder);
 
         // 4. 출력 방식 분기 처리 및 파일 저장
         if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
@@ -106,6 +111,27 @@ app.AddCommand((
 });
 
 app.Run();
+
+// 정렬 기능을 구현한 메서드
+static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> 
+SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data, 
+                string sortBy, string sortOrder)
+{
+    var sorted = sortBy.ToLower() switch
+    {
+        "score" => sortOrder.ToLower() == "asc" 
+            ? data.OrderBy(x => x.Score).ToList()
+            : data.OrderByDescending(x => x.Score).ToList(),
+        "id" => sortOrder.ToLower() == "asc"
+            ? data.OrderBy(x => x.Id).ToList()
+            : data.OrderByDescending(x => x.Id).ToList(),
+        _ => sortOrder.ToLower() == "asc"
+            ? data.OrderBy(x => x.Score).ToList()
+            : data.OrderByDescending(x => x.Score).ToList()
+    };
+    
+    return sorted;
+}
 
 // 출력 전용 로직을 분리한 메서드
 static void PrintClaimsReport(ClaimsData data, string mode)

@@ -12,13 +12,13 @@ namespace RepoScore.Services
 {
     public enum GitHubIssuePrLabel
     {
-        None,           // No labels
+        None,
         Bug,
         Documentation,
         Duplicate,
         Enhancement,
-        GoodFirstIssue, // good first issue
-        HelpWanted,     // help wanted
+        GoodFirstIssue,
+        HelpWanted,
         Invalid,
         Pinned,
         Question,
@@ -92,7 +92,6 @@ namespace RepoScore.Services
             _owner = owner;
             _repo = repo;
             _token = token ?? throw new ArgumentNullException(nameof(token));
-
             _connection = new Connection(new ProductHeaderValue("reposcore-cs"), token);
         }
 
@@ -323,7 +322,6 @@ namespace RepoScore.Services
             }
         }
 
-        // 콘솔 출력 없이 구조화된 ClaimsData를 반환하도록 변경
         public ClaimsData GetRecentClaimsData()
         {
             const string graphQL = @"
@@ -362,7 +360,6 @@ namespace RepoScore.Services
                 var issueLabels = new List<GitHubIssuePrLabel>();
                 var isClaimed = false;
 
-                // 라벨 정보 추출
                 if (issue.TryGetProperty("labels", out var labelsProp) && labelsProp.TryGetProperty("nodes", out var labelNodes))
                 {
                     foreach (var labelNode in labelNodes.EnumerateArray())
@@ -422,9 +419,7 @@ namespace RepoScore.Services
             foreach (var element in document.RootElement.EnumerateArray())
             {
                 if (element.TryGetProperty("login", out var loginProp))
-                {
                     contributors.Add(loginProp.GetString() ?? string.Empty);
-                }
             }
             return contributors;
         }

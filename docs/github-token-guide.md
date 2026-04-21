@@ -50,4 +50,4 @@ dotnet run -- oss2026hnu/reposcore-cs --token 토큰 값
 ## 주의사항
 
 * 토큰 값은 한 번만 보여지니 안전한 곳에 복사
-* CodeSpace환경에서 토큰 값 저장 시에 PR 과정에서 토큰 값도 PR 되지 않게 주의
+* Codespace 환경에서 토큰 값 저장 시에 PR 과정에서 토큰 값도 PR 되지 않게 주의
