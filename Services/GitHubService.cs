@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Octokit; 
+using RepoScore.Utils;
 using Octokit.GraphQL;
 using Octokit.GraphQL.Model;
 
@@ -291,7 +292,7 @@ namespace RepoScore.Services
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"기여자 목록 조회 실패: {ex.Message}");
+                Logger.LogError($"기여자 목록 조회 실패: {ex.Message}");
                 return new List<string>();
             }
         }

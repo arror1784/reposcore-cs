@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using Cocona;
+using System.Text;
 using RepoScore.Data;
 using RepoScore.Services;
+using RepoScore.Utils;
 
 var app = CoconaApp.Create();
 
@@ -21,10 +22,10 @@ app.AddCommand((
 {
     // 1. 토큰 및 저장소 검증
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-    if (string.IsNullOrEmpty(token)) { Console.WriteLine("오류: GitHub 토큰이 필요합니다."); return; }
+    if (string.IsNullOrEmpty(token)) { Logger.LogError("오류: GitHub 토큰이 필요합니다."); return; }
 
     var parts = repo.Split('/');
-    if (parts.Length != 2) { Console.WriteLine("오류: 저장소 이름은 'owner/repo' 형식이어야 합니다."); return; }
+    if (parts.Length != 2) { Logger.LogError("오류: 저장소 이름은 'owner/repo' 형식이어야 합니다."); return; }
 
     string ownerName = parts[0];
     string repoName = parts[1];
@@ -35,7 +36,7 @@ app.AddCommand((
         // 2. 이슈 선점 현황 조회 모드 (출력 전용 메서드로 전달)
         if (claims != null)
         {
-            Console.WriteLine($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
+            Logger.LogInfo($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
             var mode = string.IsNullOrEmpty(claims) ? "issue" : claims;
 
             var claimsData = service.GetRecentClaimsData();
@@ -44,9 +45,9 @@ app.AddCommand((
         }
 
         // 3. 전체 기여자 점수 산출
-        Console.WriteLine($"🔍 {repo} 기여자 데이터 수집 및 분석 중...");
+        Logger.LogInfo($"🔍 {repo} 기여자 데이터 수집 및 분석 중...");
         List<string> contributors = service.GetAllContributors();
-        if (contributors.Count == 0) { Console.WriteLine("조회된 기여자가 없습니다."); return; }
+        if (contributors.Count == 0) { Logger.LogInfo("조회된 기여자가 없습니다."); return; }
 
         var reportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>();
 
@@ -87,7 +88,7 @@ app.AddCommand((
 
         string csvPath = Path.Combine(output, "results.csv");
         File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
-        Console.WriteLine($"✅ 기본 데이터(CSV) 저장 완료: {csvPath}");
+        Logger.LogInfo($"✅ 기본 데이터(CSV) 저장 완료: {csvPath}");
 
         // txt 파일 생성
         if (format.ToLower() == "txt")
@@ -98,12 +99,12 @@ app.AddCommand((
             string txtContent = BuildTextReport(repo, reportData);
             
             File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
-            Console.WriteLine($"✅ 가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
+            Logger.LogInfo($"✅ 가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"데이터 처리 중 오류 발생: {ex.Message}");
+        Logger.LogError($"데이터 처리 중 오류 발생: {ex.Message}");
     }
 });
 
@@ -208,46 +209,46 @@ static void PrintClaimsReport(ClaimsData data, string mode)
 {
     if (data.ClaimedMap.Count == 0)
     {
-        Console.WriteLine("최근 48시간 내 선점된 이슈가 없습니다.");
+        Logger.WriteOutput("최근 48시간 내 선점된 이슈가 없습니다.");
         return;
     }
 
     if (mode == "user")
     {
-        Console.WriteLine("📋 미선점 이슈");
-        foreach (var url in data.UnclaimedUrls) Console.WriteLine($" - {url}");
-        Console.WriteLine("\n📌 선점된 이슈");
+        Logger.WriteOutput("📋 미선점 이슈");
+        foreach (var url in data.UnclaimedUrls) Logger.WriteOutput($" - {url}");
+        Logger.WriteOutput("\n📌 선점된 이슈");
 
         foreach (var (login, claims) in data.ClaimedMap)
         {
-            Console.WriteLine($"👤 {login}");
+            Logger.WriteOutput($"👤 {login}");
             foreach (var claim in claims)
             {
-                Console.WriteLine($" - {claim.Url}");
+                Logger.WriteOutput($" - {claim.Url}");
                 if (claim.Labels.Count > 0)
                 {
-                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
+                    Logger.WriteOutput($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
                 }
-                Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
+                Logger.WriteOutput(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
             }
         }
     }
     else
     {
-        Console.WriteLine("📋 미선점 이슈");
-        foreach (var url in data.UnclaimedUrls) Console.WriteLine($" - {url}");
-        Console.WriteLine("\n📌 선점된 이슈");
+        Logger.WriteOutput("📋 미선점 이슈");
+        foreach (var url in data.UnclaimedUrls) Logger.WriteOutput($" - {url}");
+        Logger.WriteOutput("\n📌 선점된 이슈");
         foreach (var (login, claims) in data.ClaimedMap)
         {
-            Console.WriteLine($"👤 {login}");
+            Logger.WriteOutput($"👤 {login}");
             foreach (var claim in claims)
             {
-                Console.WriteLine($" - {claim.Url}");
+                Logger.WriteOutput($" - {claim.Url}");
                 if (claim.Labels.Count > 0)
                 {
-                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
+                    Logger.WriteOutput($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
                 }
-                Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
+                Logger.WriteOutput(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
             }
         }
     }
