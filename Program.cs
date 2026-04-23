@@ -32,14 +32,15 @@ app.AddCommand((
 
     try
     {
-        // 2. 이슈 선점 현황 조회 모드 (출력 전용 메서드로 전달)
+        // 2. 이슈 선점 현황 조회 모드
         if (claims != null)
         {
             Console.WriteLine($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
             var mode = string.IsNullOrEmpty(claims) ? "issue" : claims;
 
             var claimsData = service.GetRecentClaimsData();
-            PrintClaimsReport(claimsData, mode);
+            var report = BuildClaimsReport(claimsData, mode);
+            Console.Write(report);
             return;
         }
 
@@ -52,16 +53,16 @@ app.AddCommand((
 
         foreach (var user in contributors)
         {
-            // 이슈 중 NotPlanned 또는 Duplicate인 경우 제외 (main 브랜치 로직 반영)
+            // 이슈 중 NotPlanned 또는 Duplicate인 경우 제외
             var userClaims = service.GetClaims(user)
                 .Where(c => c.ClosedReason != IssueClosedStateReason.NotPlanned && c.ClosedReason != IssueClosedStateReason.Duplicate)
                 .ToList();
-            
-            // PR 중 병합된 경우만 포함 (main 브랜치 로직 반영)
+
+            // PR 중 병합된 경우만 포함
             var prs = service.GetPullRequests(user)
                 .Where(p => p.IsMerged)
                 .ToList();
-            
+
             var featureBugPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
             var docPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
             var typoPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
@@ -93,10 +94,8 @@ app.AddCommand((
         if (format.ToLower() == "txt")
         {
             string txtPath = Path.Combine(output, "results.txt");
-            
-            // main 브랜치에서 도입된 예쁜 텍스트 표 포맷팅 사용
             string txtContent = BuildTextReport(repo, reportData);
-            
+
             File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
             Console.WriteLine($"✅ 가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
         }
@@ -177,6 +176,38 @@ static string BuildTextReport(
     return sb.ToString();
 }
 
+// 이슈 선점 현황 리포트를 문자열로 생성하는 메서드
+// 콘솔 출력과 파일 저장 모두 이 메서드를 통해 동일한 내용을 사용합니다.
+static string BuildClaimsReport(ClaimsData data, string mode)
+{
+    var sb = new StringBuilder();
+
+    if (data.ClaimedMap.Count == 0)
+    {
+        sb.AppendLine("최근 48시간 내 선점된 이슈가 없습니다.");
+        return sb.ToString();
+    }
+
+    sb.AppendLine("📋 미선점 이슈");
+    foreach (var url in data.UnclaimedUrls)
+        sb.AppendLine($" - {url}");
+
+    sb.AppendLine("\n📌 선점된 이슈");
+    foreach (var (login, claims) in data.ClaimedMap)
+    {
+        sb.AppendLine($"👤 {login}");
+        foreach (var claim in claims)
+        {
+            sb.AppendLine($" - {claim.Url}");
+            if (claim.Labels.Count > 0)
+                sb.AppendLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
+            sb.AppendLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
+        }
+    }
+
+    return sb.ToString();
+}
+
 static string PadLeft(string text, int width)
 {
     return text.PadLeft(width);
@@ -184,7 +215,6 @@ static string PadLeft(string text, int width)
 
 static string PadRightKorean(string text, int width)
 {
-    // 한글 헤더/영문 아이디가 섞여도 기본적인 정렬이 무너지지 않게 맞춤
     int textWidth = GetDisplayWidth(text);
     if (textWidth >= width) return text;
 
@@ -201,56 +231,6 @@ static int GetDisplayWidth(string text)
     }
 
     return width;
-}
-
-// 출력 전용 로직을 분리한 메서드
-static void PrintClaimsReport(ClaimsData data, string mode)
-{
-    if (data.ClaimedMap.Count == 0)
-    {
-        Console.WriteLine("최근 48시간 내 선점된 이슈가 없습니다.");
-        return;
-    }
-
-    if (mode == "user")
-    {
-        Console.WriteLine("📋 미선점 이슈");
-        foreach (var url in data.UnclaimedUrls) Console.WriteLine($" - {url}");
-        Console.WriteLine("\n📌 선점된 이슈");
-
-        foreach (var (login, claims) in data.ClaimedMap)
-        {
-            Console.WriteLine($"👤 {login}");
-            foreach (var claim in claims)
-            {
-                Console.WriteLine($" - {claim.Url}");
-                if (claim.Labels.Count > 0)
-                {
-                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
-                }
-                Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
-            }
-        }
-    }
-    else
-    {
-        Console.WriteLine("📋 미선점 이슈");
-        foreach (var url in data.UnclaimedUrls) Console.WriteLine($" - {url}");
-        Console.WriteLine("\n📌 선점된 이슈");
-        foreach (var (login, claims) in data.ClaimedMap)
-        {
-            Console.WriteLine($"👤 {login}");
-            foreach (var claim in claims)
-            {
-                Console.WriteLine($" - {claim.Url}");
-                if (claim.Labels.Count > 0)
-                {
-                    Console.WriteLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
-                }
-                Console.WriteLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
-            }
-        }
-    }
 }
 
 static string FormatRemainingTime(TimeSpan remaining)
