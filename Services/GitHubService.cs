@@ -22,7 +22,6 @@ namespace RepoScore.Services
         NotPlanned
     }
 
-    // 구조화된 반환을 위한 데이터 모델
     public class ClaimRecord
     {
         public int Number { get; set; }
@@ -32,6 +31,7 @@ namespace RepoScore.Services
         public IssueClosedStateReason ClosedReason { get; set; } = IssueClosedStateReason.None;
         public TimeSpan Remaining { get; set; }
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
+        public DateTimeOffset UpdatedAt { get; set; }
     }
 
     public class ClaimsData
@@ -47,6 +47,7 @@ namespace RepoScore.Services
         public string Title { get; set; } = string.Empty;
         public bool IsMerged { get; set; } = false;
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
+        public DateTimeOffset UpdatedAt { get; set; }
     }
 
     public class PRData
@@ -73,21 +74,24 @@ namespace RepoScore.Services
 
             _claimKeywords = keywords ?? s_defaultClaimKeywords;
 
-            // 1. GraphQL 커넥션 초기화
             _graphQLConnection = new Octokit.GraphQL.Connection(
                 new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"), token);
 
-            // 2. REST API 클라이언트 초기화
             _restClient = new Octokit.GitHubClient(new Octokit.ProductHeaderValue("reposcore-cs"))
             {
                 Credentials = new Octokit.Credentials(token)
             };
         }
-
-        public List<PRRecord> GetPullRequests(string authorLogin)
+        public List<PRRecord> GetPullRequests(string authorLogin, DateTimeOffset? since = null)
         {
+            string searchString = $"repo:{_owner}/{_repo} is:pr author:{authorLogin}";
+            if (since.HasValue)
+            {
+                searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
+            }
+
             var query = new Octokit.GraphQL.Query()
-                .Search(query: $"repo:{_owner}/{_repo} is:pr author:{authorLogin}", type: SearchType.Issue, first: 50)
+                .Search(query: searchString, type: SearchType.Issue, first: 50)
                 .Nodes
                 .OfType<Octokit.GraphQL.Model.PullRequest>()
                 .Select(pr => new
@@ -96,6 +100,7 @@ namespace RepoScore.Services
                     pr.Title,
                     pr.Url,
                     pr.Merged,
+                    pr.UpdatedAt, // 쿼리에서 UpdatedAt 가져오기
                     Labels = pr.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList()
                 });
 
@@ -110,14 +115,14 @@ namespace RepoScore.Services
                     Title = pr.Title,
                     Url = pr.Url,
                     IsMerged = pr.Merged,
+                    UpdatedAt = pr.UpdatedAt,
                     Labels = pr.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
                 });
             }
 
             return prRecords;
         }
-
-        public List<ClaimRecord> GetClaims(string authorLogin)
+        public List<ClaimRecord> GetClaims(string authorLogin, DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
             query($searchQuery: String!) {
@@ -128,6 +133,7 @@ namespace RepoScore.Services
                             title
                             url
                             stateReason
+                            updatedAt
                             labels(first: 10) {
                                 nodes {
                                     name
@@ -138,11 +144,17 @@ namespace RepoScore.Services
                 }
             }";
 
+            string searchString = $"repo:{_owner}/{_repo} is:issue author:{authorLogin}";
+            if (since.HasValue)
+            {
+                searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
+            }
+
             var requestPayload = BuildRawQueryPayload(
                 rawGraphQl,
                 new Dictionary<string, object>
                 {
-                    ["searchQuery"] = $"repo:{_owner}/{_repo} is:issue author:{authorLogin}"
+                    ["searchQuery"] = searchString
                 });
 
             var rawResponse = _graphQLConnection.Run(requestPayload).Result;
@@ -182,6 +194,16 @@ namespace RepoScore.Services
                     }
                 }
 
+                var updatedAt = DateTimeOffset.MinValue;
+                if (node.TryGetProperty("updatedAt", out var updatedElement) && updatedElement.ValueKind == JsonValueKind.String)
+                {
+                    string dateStr = updatedElement.GetString() ?? string.Empty;
+                    if (DateTimeOffset.TryParse(dateStr, out var parsedDate))
+                    {
+                        updatedAt = parsedDate;
+                    }
+                }
+
                 claimRecords.Add(new ClaimRecord
                 {
                     Number = node.TryGetProperty("number", out var numberElement) && numberElement.TryGetInt32(out var number)
@@ -194,7 +216,8 @@ namespace RepoScore.Services
                         ? urlElement.GetString() ?? string.Empty
                         : string.Empty,
                     ClosedReason = ParseIssueClosedStateReason(node),
-                    Labels = labelNames.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
+                    Labels = labelNames.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList(),
+                    UpdatedAt = updatedAt // 추출한 시간 저장
                 });
             }
 

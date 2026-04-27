@@ -20,7 +20,6 @@ app.AddCommand((
     [Option(Description = "이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)")] string? keywords = null
 ) =>
 {
-    // 1. 토큰 및 저장소 검증
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     if (string.IsNullOrEmpty(token)) { Console.Error.WriteLine("오류: GitHub 토큰이 필요합니다."); return; }
 
@@ -38,7 +37,6 @@ app.AddCommand((
 
     try
     {
-        // 2. 이슈 선점 현황 조회 모드
         if (claims != null)
         {
             Console.Error.WriteLine($"[{ownerName}/{repoName}] 최근 이슈 선점 현황을 조회합니다...\n");
@@ -50,8 +48,23 @@ app.AddCommand((
             return;
         }
 
-        // 3. 전체 기여자 점수 산출
-        Console.Error.WriteLine($"🔍 {repo} 기여자 데이터 수집 및 분석 중...");
+        Console.Error.WriteLine($"{repo} 기여자 데이터 수집 및 분석 중...");
+
+        if (!Directory.Exists(output)) Directory.CreateDirectory(output);
+        string cachePath = Path.Combine(output, "cache.json");
+        var cache = CacheManager.LoadCache(cachePath, repo);
+
+        DateTimeOffset? since = cache.LastAnalyzedAt > DateTimeOffset.MinValue ? cache.LastAnalyzedAt : null;
+
+        if (since.HasValue)
+        {
+            Console.Error.WriteLine($"기존 캐시 존재: {since.Value.ToLocalTime():yyyy-MM-dd HH:mm}");
+        }
+        else
+        {
+            Console.Error.WriteLine("기존 캐시 없음: 전체 데이터를 수집합니다.");
+        }
+
         List<string> contributors = service.GetAllContributors();
         if (contributors.Count == 0) { Console.Error.WriteLine("조회된 기여자가 없습니다."); return; }
 
@@ -59,21 +72,39 @@ app.AddCommand((
 
         foreach (var user in contributors)
         {
-            // 이슈 중 NotPlanned 또는 Duplicate인 경우 제외
-            var userClaims = service.GetClaims(user)
+            var newClaims = service.GetClaims(user, since);
+            var newPrs = service.GetPullRequests(user, since);
+
+            if (!cache.UserClaims.ContainsKey(user)) cache.UserClaims[user] = new List<ClaimRecord>();
+            if (!cache.UserPullRequests.ContainsKey(user)) cache.UserPullRequests[user] = new List<PRRecord>();
+
+            foreach (var nc in newClaims)
+            {
+                int index = cache.UserClaims[user].FindIndex(c => c.Number == nc.Number);
+                if (index >= 0) cache.UserClaims[user][index] = nc;
+                else cache.UserClaims[user].Add(nc);
+            }
+
+            foreach (var npr in newPrs)
+            {
+                int index = cache.UserPullRequests[user].FindIndex(p => p.Number == npr.Number);
+                if (index >= 0) cache.UserPullRequests[user][index] = npr;
+                else cache.UserPullRequests[user].Add(npr);
+            }
+
+            var userClaimsToCalc = cache.UserClaims[user]
                 .Where(c => c.ClosedReason != IssueClosedStateReason.NotPlanned && c.ClosedReason != IssueClosedStateReason.Duplicate)
                 .ToList();
 
-            // PR 중 병합된 경우만 포함
-            var prs = service.GetPullRequests(user)
+            var prsToCalc = cache.UserPullRequests[user]
                 .Where(p => p.IsMerged)
                 .ToList();
 
-            var featureBugPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
-            var docPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
-            var typoPrs = prs.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
-            var featureBugIssues = userClaims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
-            var docIssues = userClaims.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
+            var featureBugPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
+            var docPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
+            var typoPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
+            var featureBugIssues = userClaimsToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
+            var docIssues = userClaimsToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
 
             int finalScore
                 = ScoreCalculator.CalculateFinalScore(featureBugPrs.Count, docPrs.Count, typoPrs.Count, featureBugIssues.Count, docIssues.Count);
@@ -81,11 +112,10 @@ app.AddCommand((
             reportData.Add((user, docIssues.Count, featureBugIssues.Count, typoPrs.Count, docPrs.Count, featureBugPrs.Count, finalScore));
         }
 
-        // 3.5. 정렬 로직 적용
-        reportData = SortReportData(reportData, sortBy, sortOrder);
+        CacheManager.SaveCache(cachePath, cache);
+        Console.Error.WriteLine($"캐시 갱신 및 저장 완료: {cachePath}");
 
-        // 4. 출력 방식 분기 처리 및 파일 저장
-        if (!Directory.Exists(output)) Directory.CreateDirectory(output);
+        reportData = SortReportData(reportData, sortBy, sortOrder);
 
         // CSV 데이터 파일 생성
         var csv = new StringBuilder();
@@ -94,7 +124,7 @@ app.AddCommand((
 
         string csvPath = Path.Combine(output, "results.csv");
         File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
-        Console.Error.WriteLine($"✅ 기본 데이터(CSV) 저장 완료: {csvPath}");
+        Console.Error.WriteLine($"기본 데이터(CSV) 저장 완료: {csvPath}");
 
         // txt 파일 생성
         if (format.ToLower() == "txt")
@@ -103,7 +133,7 @@ app.AddCommand((
             string txtContent = BuildTextReport(repo, reportData);
 
             File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
-            Console.Error.WriteLine($"✅ 가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
+            Console.Error.WriteLine($"가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
         }
     }
     catch (Exception ex)
@@ -114,7 +144,6 @@ app.AddCommand((
 
 app.Run();
 
-// 정렬 기능을 구현한 메서드
 static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>
 SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data,
                 string sortBy, string sortOrder)
@@ -182,7 +211,6 @@ static string BuildTextReport(
     return sb.ToString();
 }
 
-// 이슈 선점 현황 리포트를 문자열로 생성하는 메서드
 static string BuildClaimsReport(ClaimsData data, string mode)
 {
     var sb = new StringBuilder();
@@ -193,20 +221,20 @@ static string BuildClaimsReport(ClaimsData data, string mode)
         return sb.ToString();
     }
 
-    sb.AppendLine("📋 미선점 이슈");
+    sb.AppendLine("미선점 이슈");
     foreach (var url in data.UnclaimedUrls)
         sb.AppendLine($" - {url}");
 
-    sb.AppendLine("\n📌 선점된 이슈");
+    sb.AppendLine("\n선점된 이슈");
     foreach (var (login, claims) in data.ClaimedMap)
     {
-        sb.AppendLine($"👤 {login}");
+        sb.AppendLine($"{login}");
         foreach (var claim in claims)
         {
             sb.AppendLine($" - {claim.Url}");
             if (claim.Labels.Count > 0)
-                sb.AppendLine($"   🏷️ 라벨: {string.Join(", ", claim.Labels)}");
-            sb.AppendLine(claim.HasPr ? "   ✅ PR 생성됨" : FormatRemainingTime(claim.Remaining));
+                sb.AppendLine($"    라벨: {string.Join(", ", claim.Labels)}");
+            sb.AppendLine(claim.HasPr ? "   PR 생성됨" : FormatRemainingTime(claim.Remaining));
         }
     }
 
@@ -240,6 +268,6 @@ static int GetDisplayWidth(string text)
 
 static string FormatRemainingTime(TimeSpan remaining)
 {
-    if (remaining <= TimeSpan.Zero) return "   ⌛ 기한 초과";
-    return $"   ⏳ 남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
+    if (remaining <= TimeSpan.Zero) return "    기한 초과";
+    return $"   남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
 }
