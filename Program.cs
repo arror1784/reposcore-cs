@@ -7,9 +7,7 @@ using Cocona;
 using RepoScore.Data;
 using RepoScore.Services;
 
-var app = CoconaApp.Create();
-
-app.AddCommand((
+CoconaApp.Run((
     [Argument(Description = "대상 저장소 (예: owner/repo)")] string repo,
     [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)")] string? token = null,
     [Option(Description = "최근 이슈 선점 현황 조회 (issue|user)")] string? claims = null,
@@ -141,8 +139,6 @@ app.AddCommand((
         Console.Error.WriteLine($"데이터 처리 중 오류 발생: {ex.Message}");
     }
 });
-
-app.Run();
 
 static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>
 SortReportData(List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data,
