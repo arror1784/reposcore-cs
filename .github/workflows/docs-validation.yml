@@ -1,0 +1,56 @@
+name: Docs Validation
+
+on:
+    push:
+        branches: ["**"]
+        paths:
+            - "docs/**"
+            - "tools/update-readme.py"
+            - "tools/update-synopsis.py"
+            - "Program.cs"
+            - "reposcore-cs.csproj"
+            - "Makefile"
+    pull_request:
+        branches: ["**"]
+        paths:
+            - "docs/**"
+            - "tools/update-readme.py"
+            - "tools/update-synopsis.py"
+            - "Program.cs"
+            - "reposcore-cs.csproj"
+            - "Makefile"
+
+jobs:
+    docs:
+        name: Run make docs
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup .NET SDK
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: "10.0.x"
+
+            - name: Setup Python
+              uses: actions/setup-python@v5
+              with:
+                  python-version: "3.x"
+
+            - name: Restore .NET dependencies
+              run: dotnet restore
+
+            - name: Run docs generation
+              run: make docs
+
+            - name: Ensure generated docs are up to date
+              run: |
+                  git diff --exit-code || (
+                    echo 'Generated docs are out of date. Run `make docs` locally and commit the updated files.'
+                    git --no-pager diff --stat
+                    exit 1
+                  )
