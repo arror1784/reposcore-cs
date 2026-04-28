@@ -183,3 +183,196 @@ dotnet add package Cocona
 - 의존성은 .csproj 파일에서 관리됩니다.
 - dotnet restore로 환경을 재현할 수 있습니다.
 - 팀원 간 동일한 개발 환경 유지가 가능합니다.
+
+## 7. 자동화 테스트 도구
+
+CLI 프로그램은 옵션 조합에 따라 실행 경로가 달라질 수 있으므로, 실제 실행까지 검사할 필요가 있습니다.  
+아래는 기능 추가/변경 후 테스트 시 테스트를 좀 더 쉽게 할 수 있도록 도와주는 프레임워크들에 대한 가이드입니다.
+
+---
+
+### 7.1 테스트 도구 후보
+
+| 도구 | 설명 |
+|---|---|
+| xUnit | .NET에서 많이 사용되는 오픈소스 테스트 프레임워크 |
+| NUnit | 다양한 테스트 기능을 제공하는 오래된 테스트 프레임워크 |
+| MSTest | Microsoft에서 제공하는 테스트 프레임워크 |
+
+세 도구 모두 테스트 프로젝트를 만들고 `dotnet test` 명령으로 실행할 수 있습니다.
+
+---
+
+### 7.2 테스트 프로젝트 생성
+
+테스트 도구에 따라 다음 명령어 중 하나를 사용하여 테스트 프로젝트를 생성할 수 있습니다.
+
+xUnit:
+
+```bash
+dotnet new xunit -n RepoScore.Tests
+```
+
+NUnit:
+
+```bash
+dotnet new nunit -n RepoScore.Tests
+```
+
+MSTest:
+
+```bash
+dotnet new mstest -n RepoScore.Tests
+```
+
+테스트 프로젝트에서 실제 프로젝트 코드를 사용할 수 있도록 참조를 추가합니다.
+
+```bash
+dotnet add RepoScore.Tests/RepoScore.Tests.csproj reference reposcore-cs.csproj
+```
+
+테스트 실행:
+
+```bash
+dotnet test
+```
+
+특정 테스트 프로젝트만 실행:
+
+```bash
+dotnet test RepoScore.Tests/RepoScore.Tests.csproj
+```
+
+---
+
+### 7.3 기본 테스트 코드 예시
+
+xUnit 기준 기본 테스트 코드는 다음과 같습니다.
+
+```csharp
+using Xunit;
+
+namespace RepoScore.Tests;
+
+public class BasicTests
+{
+    [Fact]
+    public void SampleTest()
+    {
+        int result = 1 + 1;
+
+        Assert.Equal(2, result);
+    }
+}
+```
+
+`[Fact]`는 하나의 테스트를 의미하고,  
+`Assert.Equal(2, result)`는 `result` 값이 `2`인지 확인하는 코드입니다.
+
+NUnit이나 MSTest를 선택한 경우에는 테스트 속성 이름이 조금 다릅니다.
+
+| 도구 | 단일 테스트 | 여러 입력값 테스트 |
+|---|---|---|
+| xUnit | `[Fact]` | `[Theory]`, `[InlineData]` |
+| NUnit | `[Test]` | `[TestCase]` |
+| MSTest | `[TestMethod]` | `[DataTestMethod]`, `[DataRow]` |
+
+---
+
+### 7.4 CLI 실행 테스트 예시
+
+CLI 프로그램은 테스트 코드에서 실제 명령어를 실행해 볼 수 있습니다.
+
+```csharp
+using System.Diagnostics;
+using Xunit;
+
+namespace RepoScore.Tests;
+
+public class CliExecutionTests
+{
+    [Theory]
+    [InlineData("--format=txt")]
+    [InlineData("--format=csv")]
+    [InlineData("--format=txt --show-claims")]
+    public async Task Cli_Should_Run_Without_Error(string options)
+    {
+        var repo = "oss2025hnu/reposcore-cs";
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"run -- {repo} {options}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            }
+        };
+
+        process.Start();
+
+        string output = await process.StandardOutput.ReadToEndAsync();
+        string error = await process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        Assert.True(process.ExitCode == 0, error);
+    }
+}
+```
+
+이 테스트는 옵션 조합별로 프로그램을 실행하고, 종료 코드가 `0`인지 확인합니다.
+
+프로젝트 경로를 직접 지정해야 한다면 다음처럼 `--project`를 사용할 수 있습니다.
+
+```csharp
+Arguments = $"run --project reposcore-cs.csproj -- {repo} {options}";
+```
+
+---
+
+### 7.5 Codespaces에서 xUnit 오류가 나는 경우
+
+Codespaces에서 다음 오류가 발생할 수 있습니다.
+
+```text
+The type or namespace name 'Xunit' could not be found
+The type or namespace name 'Fact' could not be found
+```
+
+`RepoScore.Tests.csproj`에 xUnit 패키지가 있고 테스트 파일 위치도 맞는데 오류가 난다면,  
+메인 프로젝트가 테스트 폴더의 `.cs` 파일까지 같이 컴파일하고 있을 수 있습니다.
+
+이 경우 메인 프로젝트의 `.csproj` 파일에 테스트 폴더 제외 설정을 추가합니다.
+
+```xml
+<ItemGroup>
+  <Compile Remove="RepoScore.Tests/**/*.cs" />
+  <EmbeddedResource Remove="RepoScore.Tests/**" />
+  <None Remove="RepoScore.Tests/**" />
+</ItemGroup>
+```
+
+수정 후 다시 실행합니다.
+
+```bash
+dotnet clean
+dotnet restore
+dotnet test RepoScore.Tests/RepoScore.Tests.csproj
+```
+
+---
+
+### 7.7 정리
+
+기본 흐름은 다음과 같습니다.
+
+```text
+1. 테스트 도구 선택
+2. 테스트 프로젝트 생성
+3. 실제 프로젝트 참조 추가
+4. 테스트 코드 작성
+5. dotnet test 실행
+```
