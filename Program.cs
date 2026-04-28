@@ -13,7 +13,7 @@ CoconaApp.Run((
     [Option(Description = "최근 이슈 선점 현황 조회 (issue|user)")] string? claims = null,
     [Option('f', Description = "출력 형식 (csv, txt)")] string format = "csv",
     [Option('o', Description = "출력 디렉토리 경로")] string output = "./results",
-    [Option(Description = "정렬 기준 (score | id)")] string sortBy = "score",
+    [Option(Description = "정렬 기준 (score | id) (기본값 score)")] string sortBy = "score",
     [Option(Description = "정렬 방법 (asc | desc)")] string sortOrder = "desc",
     [Option(Description = "이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)")] string? keywords = null
 ) =>
