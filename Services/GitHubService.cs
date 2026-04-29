@@ -84,7 +84,7 @@ namespace RepoScore.Services
         }
         public List<PRRecord> GetPullRequests(string authorLogin, DateTimeOffset? since = null)
         {
-            string searchString = $"repo:{_owner}/{_repo} is:pr author:{authorLogin}";
+            string searchString = $"repo:{_owner}/{_repo} is:pr is:merged author:{authorLogin}";
             if (since.HasValue)
             {
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
@@ -144,7 +144,7 @@ namespace RepoScore.Services
                 }
             }";
 
-            string searchString = $"repo:{_owner}/{_repo} is:issue author:{authorLogin}";
+            string searchString = $"repo:{_owner}/{_repo} is:issue author:{authorLogin} -reason:\"not planned\" -reason:\"duplicate\"";
             if (since.HasValue)
             {
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
