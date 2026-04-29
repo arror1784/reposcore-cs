@@ -27,6 +27,13 @@ CoconaApp.Run((
     string ownerName = parts[0];
     string repoName = parts[1];
 
+    var allowedFormats = new[] { "csv", "txt" };
+    if (!allowedFormats.Contains(format.ToLowerInvariant()))
+    {
+        Console.Error.WriteLine($"오류: 지원하지 않는 형식입니다. csv 또는 txt를 입력해 주세요. (입력값: {format})");
+        return;
+    }
+
     string[]? parsedKeywords = keywords != null
         ? keywords.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         : null;
