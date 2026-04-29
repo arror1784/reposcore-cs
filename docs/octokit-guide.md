@@ -4,9 +4,10 @@
 
 > C# 환경에서 GitHub API를 사용하기 위한 라이브러리인 Octokit.NET의 기본 사용법입니다.  
 > 저장소 이슈 조회, Pull Request 조회 등 GitHub 정보 연동 기능 구현 전에 기본 구조를 이해하는 데 목적이 있습니다.
-> 본 프로젝트에서는 GitHub GraphQL API 기반으로 데이터를 조회하며, REST API 방식은 사용하지 않습니다.
+> 본 프로젝트에서는 GitHub GraphQL API 기반으로 데이터를 조회합니다.
+> 다만 Octokit.NET은 GitHub REST API를 .NET 환경에서 사용하기 위한 클라이언트 라이브러리이므로, 아래 REST 관련 내용은 기본 이해 및 참고용으로 다룹니다.
 
-## 1. Octokit.NET 설치 방법
+## 1. Octokit.NET 설치 방법 (GitHub REST API 참고용)
 
 Octokit.NET은 GitHub 공식 .NET API 라이브러리입니다.
 
@@ -27,7 +28,7 @@ dotnet add package Octokit
 
 ---
 
-## 2. GitHub API 접근을 위한 기본 설정
+## 2. GitHub REST API 접근을 위한 기본 설정 (Octokit.NET 참고용)
 
 GitHub API를 사용하려면 먼저 `GitHubClient` 객체를 생성해야 합니다.
 
