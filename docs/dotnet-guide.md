@@ -178,9 +178,13 @@ dotnet restore
 6.6 현재 프로젝트 예시
 
 ```bash
-dotnet add package Octokit
+dotnet add package Octokit.GraphQL --prerelease
 dotnet add package Cocona
 ```
+
+> **참고:** 현재 프로젝트는 GitHub GraphQL API를 주력으로 사용하므로 `Octokit.GraphQL`을 설치합니다.  
+> 기여자 목록 조회(`GetAllContributors`) 등 일부 기능에서는 REST 클라이언트(`Octokit`)도 내부적으로 함께 사용됩니다.
+
 6.7 정리
 - 패키지는 dotnet add package로 설치합니다.
 - 의존성은 .csproj 파일에서 관리됩니다.
