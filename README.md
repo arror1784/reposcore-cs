@@ -39,21 +39,22 @@ dotnet run -- --help
 <!-- synopsis:start -->
 
 ```text
-Usage: reposcore-cs [--token <String>] [--claims <String>] [--format <String>] [--output <String>] [--sort-by <String>] [--sort-order <String>] [--keywords <String>] [--help] [--version] repo
+Usage: reposcore-cs [--token <String>] [--claims <String>] [--format <String>] [--output <String>] [--sort-by <String>] [--sort-order <String>] [--keywords <String>] [--no-cache] [--help] [--version] repos0 ... reposN
 
 reposcore-cs
 
 Arguments:
-  0: repo    대상 저장소 (예: owner/repo) (Required)
+  0: repos    대상 저장소 목록 (예: owner/repo1 owner/repo2) (Required)
 
 Options:
   -t, --token <String>     GitHub Token (미입력시 GITHUB_TOKEN 사용)
   --claims <String>        최근 이슈 선점 현황 조회 (issue|user)
-  -f, --format <String>    출력 형식 (csv, txt) (Default: csv)
-  -o, --output <String>    출력 디렉토리 경로 (Default: ./results)
-  --sort-by <String>       정렬 기준 (score | id) (Default: score)
-  --sort-order <String>    정렬 방법 (asc | desc) (Default: desc)
+  -f, --format <String>    출력 형식 (csv, txt)
+  -o, --output <String>    출력 디렉토리 경로
+  --sort-by <String>       정렬 기준 (score | id)
+  --sort-order <String>    정렬 방법 (asc | desc)
   --keywords <String>      이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)
+  --no-cache               캐시를 무시하고 전체 데이터를 다시 수집할지 여부
   -h, --help               Show help message
   --version                Show version
 ```
