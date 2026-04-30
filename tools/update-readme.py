@@ -20,9 +20,8 @@ from pathlib import Path
 
 # ── 설정 ──────────────────────────────────────────────────────────────────────
 DOCS_DIR    = Path(__file__).parent.parent / "docs"
-TEMPLATE_DIR = DOCS_DIR / "templates"
 
-TEMPLATE_README = TEMPLATE_DIR / "README-template.md"
+TEMPLATE_README = DOCS_DIR / "README-template.md"
 README_PATH = DOCS_DIR / "README.md"
 
 MARKER_START = "<!-- DOC_LIST_START -->"
@@ -63,7 +62,7 @@ def collect_docs(docs_dir: Path) -> list[tuple[str, str]]:
     """
     entries = []
     for md_file in sorted(docs_dir.glob("*.md")):
-        if md_file.name.lower() == "readme.md":
+        if md_file.name.lower() in {"readme.md", "readme-template.md"}:
             continue
         title = extract_title(md_file)
         entries.append((md_file.name, title))
@@ -88,8 +87,8 @@ def update_readme(readme_path: Path,readme_template_path: Path, new_block: str) 
         )
         readme_template_path.write_text(content, encoding="utf-8")
         print(f"[생성] {readme_path}")
-        
-    
+
+
     original = readme_template_path.read_text(encoding="utf-8")
 
     if MARKER_START not in original:
@@ -112,11 +111,9 @@ def update_readme(readme_path: Path,readme_template_path: Path, new_block: str) 
 def main() -> None:
     if not DOCS_DIR.is_dir():
         raise FileNotFoundError(f"docs 폴더를 찾을 수 없습니다: {DOCS_DIR}")
-    if not TEMPLATE_DIR.is_dir():
-        raise FileNotFoundError(f"templates 폴더를 찾을 수 없습니다: {TEMPLATE_DIR}")
     if not TEMPLATE_README.is_file():
         raise FileNotFoundError(f"README 템플릿을 찾을 수 없습니다: {TEMPLATE_README}")
-    
+
 
     entries = collect_docs(DOCS_DIR)
     print(f"[탐색] {len(entries)}개 문서 발견:")
