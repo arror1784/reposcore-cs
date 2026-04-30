@@ -20,7 +20,7 @@
 
 > ⚠️**아래 상황이 발생하면 반드시 스크립트를 통해 목록을 자동 갱신해줘야 합니다.**
 >
-> - docs/README.md 파일을 업데이트하기 위해 templates/README-template.md 파일을 수정한 경우
+> - docs/README.md 파일을 업데이트하기 위해 docs/README-template.md 파일을 수정한 경우
 > - docs/\*.md 경로에 새로운 문서를 생성한 경우
 > - 기존 문서를 삭제한 경우
 > - 파일 이름을 변경하거나, 문서 내부의 최상위 제목(# 제목)을 수정한 경우
@@ -43,7 +43,7 @@
 > ```
 >
 > ⚠️ **수작업으로 문서 목록 갱신하지 마세요.**.  
-> ⚠️ **docs/READEME.md 파일을 직접 수정하지 마세요.**
+> ⚠️ **docs/README.md 파일을 직접 수정하지 마세요.**
 
 ---
 
@@ -51,11 +51,11 @@
 
 > ⚠️ `docs/README.md`를 직접 수정하지 마세요.
 
-`docs/README.md`를 수정하려면 먼저 `docs/templates/README-template.md`를 업데이트한 후, 루트 디렉터리에서 `python tools/update-readme.py`를 실행하여 `docs/README.md`를 자동으로 갱신하세요.
+`docs/README.md`를 수정하려면 먼저 `docs/README-template.md`를 업데이트한 후, 루트 디렉터리에서 `python tools/update-readme.py`를 실행하여 `docs/README.md`를 자동으로 갱신하세요.
 
 ### 수정 방법
 
-1. `docs/templates/README-template.md`를 업데이트합니다.
+1. `docs/README-template.md`를 업데이트합니다.
 2. 루트 디렉터리에서 `python tools/update-readme.py`를 실행합니다.
 3. 커밋하기 전에 `docs/README.md`가 자동으로 갱신되었는지 확인합니다.
 
