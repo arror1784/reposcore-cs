@@ -28,8 +28,8 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Run make 
-        run: make
+      - name: Run documentation generation
+        run: python3 tools/update-readme.py && python3 tools/update-synopsis.py
 
       - name: Verify no changes in README files
         run: |
