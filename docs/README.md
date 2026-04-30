@@ -38,11 +38,11 @@
 >
 > ```
 > 참고사항: 실행 명령어는 현재 작업중인 디렉터리에 따라 유동적으로 변동될 수 있음.
-> 예시) Root가 아닌 docs/에 위치할 시, python ../tools/update-readme.py 명령어 사용 시 작동
+> 예시) Root가 아닌 docs/에 위치할 시, python tools/update-readme.py 명령어 사용 시 작동
 > ```
 >
 > ⚠️ **수작업으로 문서 목록 갱신하지 마세요.**.  
-> ⚠️ **docs/README.md 파일을 직접 수정하지 마세요.**
+> ⚠️ **docs/READEME.md 파일을 직접 수정하지 마세요.**
 
 ---
 
