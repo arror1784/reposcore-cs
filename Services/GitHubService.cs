@@ -50,12 +50,6 @@ namespace RepoScore.Services
         public DateTimeOffset UpdatedAt { get; set; }
     }
 
-    public class PRData
-    {
-        public Dictionary<string, List<PRRecord>> PullRequestsByAuthor { get; set; } = new();
-        public List<string> AllUrls { get; set; } = new();
-    }
-
     public class GitHubService
     {
         private readonly Octokit.GraphQL.Connection _graphQLConnection;
@@ -82,6 +76,7 @@ namespace RepoScore.Services
                 Credentials = new Octokit.Credentials(token)
             };
         }
+
         public List<PRRecord> GetPullRequests(string authorLogin, DateTimeOffset? since = null)
         {
             string searchString = $"repo:{_owner}/{_repo} is:pr author:{authorLogin}";
@@ -90,43 +85,60 @@ namespace RepoScore.Services
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
             }
 
-            var query = new Octokit.GraphQL.Query()
-                .Search(query: searchString, type: SearchType.Issue, first: 50)
-                .Nodes
-                .OfType<Octokit.GraphQL.Model.PullRequest>()
-                .Select(pr => new
-                {
-                    pr.Number,
-                    pr.Title,
-                    pr.Url,
-                    pr.Merged,
-                    pr.UpdatedAt, // 쿼리에서 UpdatedAt 가져오기
-                    Labels = pr.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList()
-                });
-
-            var result = _graphQLConnection.Run(query).Result;
             var prRecords = new List<PRRecord>();
+            string? cursor = null;
+            bool hasNextPage = true;
 
-            foreach (var pr in result)
+            while (hasNextPage)
             {
-                prRecords.Add(new PRRecord
+                var query = new Octokit.GraphQL.Query()
+                    .Search(query: searchString, type: SearchType.Issue, first: 100, after: cursor)
+                    .Select(s => new
+                    {
+                        s.PageInfo.HasNextPage,
+                        s.PageInfo.EndCursor,
+                        Items = s.Nodes.OfType<Octokit.GraphQL.Model.PullRequest>().Select(pr => new
+                        {
+                            pr.Number,
+                            pr.Title,
+                            pr.Url,
+                            pr.Merged,
+                            pr.UpdatedAt,
+                            Labels = pr.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList()
+                        }).ToList()
+                    });
+
+                var result = _graphQLConnection.Run(query).Result;
+
+                foreach (var pr in result.Items)
                 {
-                    Number = pr.Number,
-                    Title = pr.Title,
-                    Url = pr.Url,
-                    IsMerged = pr.Merged,
-                    UpdatedAt = pr.UpdatedAt,
-                    Labels = pr.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
-                });
+                    prRecords.Add(new PRRecord
+                    {
+                        Number = pr.Number,
+                        Title = pr.Title,
+                        Url = pr.Url,
+                        IsMerged = pr.Merged,
+                        UpdatedAt = pr.UpdatedAt,
+                        Labels = pr.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList()
+                    });
+                }
+
+                hasNextPage = result.HasNextPage;
+                cursor = result.EndCursor;
             }
 
             return prRecords;
         }
+
         public List<ClaimRecord> GetClaims(string authorLogin, DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
-            query($searchQuery: String!) {
-                search(query: $searchQuery, type: ISSUE, first: 50) {
+            query($searchQuery: String!, $after: String) {
+                search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
                     nodes {
                         ... on Issue {
                             number
@@ -150,78 +162,142 @@ namespace RepoScore.Services
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
             }
 
-            var requestPayload = BuildRawQueryPayload(
-                rawGraphQl,
-                new Dictionary<string, object>
-                {
-                    ["searchQuery"] = searchString
-                });
-
-            var rawResponse = _graphQLConnection.Run(requestPayload).Result;
             var claimRecords = new List<ClaimRecord>();
+            string? cursor = null;
+            bool hasNextPage = true;
 
-            using var document = JsonDocument.Parse(rawResponse);
-
-            if (!document.RootElement.TryGetProperty("data", out var dataElement) ||
-                !dataElement.TryGetProperty("search", out var searchElement) ||
-                !searchElement.TryGetProperty("nodes", out var nodesElement) ||
-                nodesElement.ValueKind != JsonValueKind.Array)
+            while (hasNextPage)
             {
-                return claimRecords;
-            }
-
-            foreach (var node in nodesElement.EnumerateArray())
-            {
-                if (node.ValueKind != JsonValueKind.Object)
-                    continue;
-
-                var labelNames = new List<string>();
-                if (node.TryGetProperty("labels", out var labelsElement) &&
-                    labelsElement.ValueKind == JsonValueKind.Object &&
-                    labelsElement.TryGetProperty("nodes", out var labelNodesElement) &&
-                    labelNodesElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var labelNode in labelNodesElement.EnumerateArray())
+                var requestPayload = BuildRawQueryPayload(
+                    rawGraphQl,
+                    new Dictionary<string, object>
                     {
-                        if (labelNode.ValueKind == JsonValueKind.Object &&
-                            labelNode.TryGetProperty("name", out var labelNameElement) &&
-                            labelNameElement.ValueKind == JsonValueKind.String)
+                        ["searchQuery"] = searchString,
+                        ["after"] = cursor!
+                    });
+
+                var rawResponse = _graphQLConnection.Run(requestPayload).Result;
+                using var document = JsonDocument.Parse(rawResponse);
+
+                if (!document.RootElement.TryGetProperty("data", out var dataElement) ||
+                    !dataElement.TryGetProperty("search", out var searchElement))
+                {
+                    break;
+                }
+
+                var pageInfo = searchElement.GetProperty("pageInfo");
+                hasNextPage = pageInfo.GetProperty("hasNextPage").GetBoolean();
+                cursor = pageInfo.GetProperty("endCursor").GetString();
+
+                if (searchElement.TryGetProperty("nodes", out var nodesElement) && nodesElement.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var node in nodesElement.EnumerateArray())
+                    {
+                        if (node.ValueKind != JsonValueKind.Object) continue;
+
+                        var labelNames = new List<string>();
+                        if (node.TryGetProperty("labels", out var labelsElement) &&
+                            labelsElement.TryGetProperty("nodes", out var labelNodesElement))
                         {
-                            var labelName = labelNameElement.GetString();
-                            if (!string.IsNullOrWhiteSpace(labelName))
-                                labelNames.Add(labelName);
+                            foreach (var labelNode in labelNodesElement.EnumerateArray())
+                            {
+                                if (labelNode.TryGetProperty("name", out var labelNameElement))
+                                    labelNames.Add(labelNameElement.GetString() ?? "");
+                            }
                         }
+
+                        var updatedAt = node.TryGetProperty("updatedAt", out var updatedElement)
+                            ? DateTimeOffset.Parse(updatedElement.GetString()!) : DateTimeOffset.MinValue;
+
+                        claimRecords.Add(new ClaimRecord
+                        {
+                            Number = node.TryGetProperty("number", out var numEl) ? numEl.GetInt32() : 0,
+                            Title = node.TryGetProperty("title", out var titEl) ? titEl.GetString() ?? "" : "",
+                            Url = node.TryGetProperty("url", out var urlEl) ? urlEl.GetString() ?? "" : "",
+                            ClosedReason = ParseIssueClosedStateReason(node),
+                            Labels = labelNames.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList(),
+                            UpdatedAt = updatedAt
+                        });
                     }
                 }
-
-                var updatedAt = DateTimeOffset.MinValue;
-                if (node.TryGetProperty("updatedAt", out var updatedElement) && updatedElement.ValueKind == JsonValueKind.String)
-                {
-                    string dateStr = updatedElement.GetString() ?? string.Empty;
-                    if (DateTimeOffset.TryParse(dateStr, out var parsedDate))
-                    {
-                        updatedAt = parsedDate;
-                    }
-                }
-
-                claimRecords.Add(new ClaimRecord
-                {
-                    Number = node.TryGetProperty("number", out var numberElement) && numberElement.TryGetInt32(out var number)
-                        ? number
-                        : 0,
-                    Title = node.TryGetProperty("title", out var titleElement) && titleElement.ValueKind == JsonValueKind.String
-                        ? titleElement.GetString() ?? string.Empty
-                        : string.Empty,
-                    Url = node.TryGetProperty("url", out var urlElement) && urlElement.ValueKind == JsonValueKind.String
-                        ? urlElement.GetString() ?? string.Empty
-                        : string.Empty,
-                    ClosedReason = ParseIssueClosedStateReason(node),
-                    Labels = labelNames.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList(),
-                    UpdatedAt = updatedAt // 추출한 시간 저장
-                });
             }
 
             return claimRecords;
+        }
+
+        public ClaimsData GetRecentClaimsData()
+        {
+            var claimsData = new ClaimsData();
+            string? cursor = null;
+            bool hasNextPage = true;
+            var now = DateTimeOffset.UtcNow;
+
+            while (hasNextPage)
+            {
+                var query = new Octokit.GraphQL.Query()
+                    .Repository(_repo, _owner)
+                    .Issues(first: 100, after: cursor, states: new[] { IssueState.Open }, orderBy: new IssueOrder { Field = IssueOrderField.CreatedAt, Direction = OrderDirection.Desc })
+                    .Select(s => new
+                    {
+                        s.PageInfo.HasNextPage,
+                        s.PageInfo.EndCursor,
+                        Items = s.Nodes.Select(issue => new
+                        {
+                            issue.Number,
+                            issue.Url,
+                            Labels = issue.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList(),
+                            Comments = issue.Comments(10, null, null, null, null).Nodes.Select(c => new
+                            {
+                                c.Body,
+                                c.CreatedAt,
+                                AuthorLogin = c.Author.Login
+                            }).ToList()
+                        }).ToList()
+                    });
+
+                var result = _graphQLConnection.Run(query).Result;
+
+                foreach (var issue in result.Items)
+                {
+                    var issueLabels = issue.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList();
+                    var isClaimed = false;
+
+                    foreach (var comment in issue.Comments)
+                    {
+                        if ((now - comment.CreatedAt).TotalHours > 48) continue;
+
+                        var login = comment.AuthorLogin ?? "unknown";
+
+                        if (_claimKeywords.Any(k => comment.Body.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                        {
+                            var deadlineHours = IsDocumentTask(issueLabels) ? 24.0 : 48.0;
+                            var remaining = comment.CreatedAt.AddHours(deadlineHours) - now;
+                            var hasPr = issue.Number > 0 && HasLinkedPullRequest(issue.Number);
+
+                            if (!claimsData.ClaimedMap.ContainsKey(login))
+                                claimsData.ClaimedMap[login] = new List<ClaimRecord>();
+
+                            claimsData.ClaimedMap[login].Add(new ClaimRecord
+                            {
+                                Number = issue.Number,
+                                Url = issue.Url,
+                                HasPr = hasPr,
+                                Remaining = remaining,
+                                Labels = issueLabels
+                            });
+                            isClaimed = true;
+                            break;
+                        }
+                    }
+
+                    if (!isClaimed) claimsData.UnclaimedUrls.Add(issue.Url);
+                }
+
+                hasNextPage = result.HasNextPage;
+                cursor = result.EndCursor;
+            }
+
+            return claimsData;
         }
 
         public List<string> GetPullRequestComments(int prNumber)
@@ -309,67 +385,6 @@ namespace RepoScore.Services
                 "NOT_PLANNED" or "NOTPLANNED" => IssueClosedStateReason.NotPlanned,
                 _ => IssueClosedStateReason.None
             };
-        }
-
-        public ClaimsData GetRecentClaimsData()
-        {
-            var query = new Octokit.GraphQL.Query()
-                .Repository(_repo, _owner)
-                .Issues(first: 20, states: new[] { IssueState.Open }, orderBy: new IssueOrder { Field = IssueOrderField.CreatedAt, Direction = OrderDirection.Desc })
-                .Nodes.Select(issue => new
-                {
-                    issue.Number,
-                    issue.Url,
-                    Labels = issue.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList(),
-                    Comments = issue.Comments(10, null, null, null, null).Nodes.Select(c => new
-                    {
-                        c.Body,
-                        c.CreatedAt,
-                        AuthorLogin = c.Author.Login
-                    }).ToList()
-                });
-
-            var result = _graphQLConnection.Run(query).Result;
-            var now = DateTimeOffset.UtcNow;
-            var claimsData = new ClaimsData();
-
-            foreach (var issue in result)
-            {
-                var issueLabels = issue.Labels.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList();
-                var isClaimed = false;
-
-                foreach (var comment in issue.Comments)
-                {
-                    if ((now - comment.CreatedAt).TotalHours > 48) continue;
-
-                    var login = comment.AuthorLogin ?? "unknown";
-
-                    if (_claimKeywords.Any(k => comment.Body.Contains(k, StringComparison.OrdinalIgnoreCase)))
-                    {
-                        var deadlineHours = IsDocumentTask(issueLabels) ? 24.0 : 48.0;
-                        var remaining = comment.CreatedAt.AddHours(deadlineHours) - now;
-                        var hasPr = issue.Number > 0 && HasLinkedPullRequest(issue.Number);
-
-                        if (!claimsData.ClaimedMap.ContainsKey(login))
-                            claimsData.ClaimedMap[login] = new List<ClaimRecord>();
-
-                        claimsData.ClaimedMap[login].Add(new ClaimRecord
-                        {
-                            Number = issue.Number,
-                            Url = issue.Url,
-                            HasPr = hasPr,
-                            Remaining = remaining,
-                            Labels = issueLabels
-                        });
-                        isClaimed = true;
-                        break;
-                    }
-                }
-
-                if (!isClaimed) claimsData.UnclaimedUrls.Add(issue.Url);
-            }
-
-            return claimsData;
         }
 
         public List<string> GetAllContributors()
