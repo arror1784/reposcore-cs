@@ -13,6 +13,8 @@ namespace RepoScore.Data
         public string Repository { get; set; } = string.Empty;
         public DateTimeOffset LastAnalyzedAt { get; set; } = DateTimeOffset.MinValue;
 
+        public string[]? Keywords { get; set; }
+
         public Dictionary<string, List<ClaimRecord>> UserClaims { get; set; } = new();
 
         public Dictionary<string, List<PRRecord>> UserPullRequests { get; set; } = new();
@@ -56,7 +58,7 @@ namespace RepoScore.Data
                 return new RepoCache { Repository = repoName };
             }
         }
-        public static void SaveCache(string cacheFilePath, RepoCache cacheData)
+        public static void SaveCache(string cacheFilePath, RepoCache cacheData, string[]? keywords)
         {
             var dir = Path.GetDirectoryName(cacheFilePath);
             if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -65,9 +67,24 @@ namespace RepoScore.Data
             }
 
             cacheData.LastAnalyzedAt = DateTimeOffset.UtcNow;
+            cacheData.Keywords = keywords;
 
             string json = JsonSerializer.Serialize(cacheData, s_jsonOptions);
             File.WriteAllText(cacheFilePath, json);
+        }
+        public static bool HasSameKeywords(RepoCache cacheData, string[]? currentKeywords)
+        {
+            var cachedKeywords = cacheData.Keywords;
+
+            if (cachedKeywords == null && currentKeywords == null)
+                return true;
+
+            if (cachedKeywords == null || currentKeywords == null)
+                return false;
+
+            return cachedKeywords
+                .OrderBy(x => x)
+                .SequenceEqual(currentKeywords.OrderBy(x => x));
         }
     }
 }
