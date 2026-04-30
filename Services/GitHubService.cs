@@ -235,6 +235,8 @@ namespace RepoScore.Services
             return _graphQLConnection.Run(query).Result.ToList();
         }
 
+
+
         private bool HasLinkedPullRequest(int issueNumber)
         {
             try
