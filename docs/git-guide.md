@@ -1,5 +1,5 @@
 # git 기초
-## Git의 3가지 상태 및 영역
+## Git의 3가지 상태 및 영역 ㅁㄴㅇ
 1. Working Directory에서 파일을 수정.
 
 2. 수정된 파일 중 기록할 대상만 Staging Area에 올림.

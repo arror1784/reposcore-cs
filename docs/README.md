@@ -5,7 +5,7 @@
 <!-- DOC_LIST_START -->
 - [cocona-guide.md](./cocona-guide.md): Cocona 라이브러리 가이드
 - [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
-- [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드
+- [docker-guide.md](./docker-guide.md): Docker 설치 및 구동 가이드 ssdas123123
 - [dotnet-guide.md](./dotnet-guide.md): C# 개발을 위한 .NET 설치 및 프로젝트 구성 가이드
 - [git-guide.md](./git-guide.md): git 기초
 - [github-token-guide.md](./github-token-guide.md): GitHub Personal Access Token 가이드
@@ -38,11 +38,11 @@
 >
 > ```
 > 참고사항: 실행 명령어는 현재 작업중인 디렉터리에 따라 유동적으로 변동될 수 있음.
-> 예시) Root가 아닌 docs/에 위치할 시, python ../tools/update-readme.py 명령어 사용 시 작동
+> 예시) Root가 아닌 docs/에 위치할 시, python tools/update-readme.py 명령어 사용 시 작동
 > ```
 >
 > ⚠️ **수작업으로 문서 목록 갱신하지 마세요.**.  
-> ⚠️ **docs/README.md 파일을 직접 수정하지 마세요.**
+> ⚠️ **docs/READEME.md 파일을 직접 수정하지 마세요.**
 
 ---
 

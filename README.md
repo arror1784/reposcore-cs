@@ -39,7 +39,7 @@ dotnet run -- --help
 <!-- synopsis:start -->
 
 ```text
-사용법: reposcore-cs [--token <String>] [--show-claims <String>] [--format <String>] [--output-dir <String>] [--sort-by <String>] [--sort-order <String>] [--help] [--version] repo
+사용법: reposcore-cs [--token <String>] [--claims <String>] [--format <String>] [--output <String>] [--sort-by <String>] [--sort-order <String>] [--keywords <String>] [--help] [--version] repo
 
 reposcore-cs
 
@@ -47,14 +47,15 @@ reposcore-cs
   0: repo    대상 저장소 (예: owner/repo) (필수)
 
 옵션:
-  -t, --token <String>         GitHub Token (미입력시 GITHUB_TOKEN 사용)
-  --show-claims <String>       최근 이슈 선점 현황 조회 (issue|user)
-  -f, --format <String>        출력 형식 (csv, txt) (기본값: csv)
-  -o, --output-dir <String>    출력 디렉토리 경로 (기본값: ./results)
-  --sort-by <String>           정렬 기준 (score | id, 기본값: score) (기본값: score)
-  --sort-order <String>        정렬 방법 (asc | desc, 기본값: desc) (기본값: desc)
-  -h, --help                   도움말을 봅니다.
-  --version                    버전 정보를 봅니다.
+  -t, --token <String>     GitHub Token (미입력시 GITHUB_TOKEN 사용)
+  --claims <String>        최근 이슈 선점 현황 조회 (issue|user)
+  -f, --format <String>    출력 형식 sd  mmmm(csv, txt) (기본값: csv)
+  -o, --output <String>    출력 디렉토리 경로 (기본값: ./results)
+  --sort-by <String>       정렬 기준 (score | id) (기본값: score)
+  --sort-order <String>    정렬 방법 (asc | desc) (기본값: desc)
+  --keywords <String>      이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)
+  -h, --help               도움말을 봅니다.
+  --version                버전 정보를 봅니다.
 ```
 
 <!-- synopsis:end -->
