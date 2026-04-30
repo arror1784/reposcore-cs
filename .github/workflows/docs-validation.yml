@@ -28,11 +28,11 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Run documentation generation
+      - name: Run make 
         env:
           LANG: ko_KR.UTF-8
           LC_ALL: ko_KR.UTF-8
-        run: python3 tools/update-readme.py && python3 tools/update-synopsis.py
+        run: make
 
       - name: Verify no changes in README files
         run: |
