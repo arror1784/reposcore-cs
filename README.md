@@ -49,7 +49,7 @@ reposcore-cs
 옵션:
   -t, --token <String>     GitHub Token (미입력시 GITHUB_TOKEN 사용)
   --claims <String>        최근 이슈 선점 현황 조회 (issue|user)
-  -f, --format <String>    출력 형식 sd (csv, txt) (기본값: csv)
+  -f, --format <String>    출력 형식 sd  mmmm(csv, txt) (기본값: csv)
   -o, --output <String>    출력 디렉토리 경로 (기본값: ./results)
   --sort-by <String>       정렬 기준 (score | id) (기본값: score)
   --sort-order <String>    정렬 방법 (asc | desc) (기본값: desc)

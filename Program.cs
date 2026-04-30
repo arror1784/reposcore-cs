@@ -11,7 +11,7 @@ CoconaApp.Run((
     [Argument(Description = "대상 저장소 (예: owner/repo)")] string repo,
     [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)")] string? token = null,
     [Option(Description = "최근 이슈 선점 현황 조회 (issue|user)")] string? claims = null,
-    [Option('f', Description = "출력 형식 sd (csv, txt)")] string format = "csv",
+    [Option('f', Description = "출력 형식 sd  mmmm(csv, txt)")] string format = "csv",
     [Option('o', Description = "출력 디렉토리 경로")] string output = "./results",
     [Option(Description = "정렬 기준 (score | id)")] string sortBy = "score",
     [Option(Description = "정렬 방법 (asc | desc)")] string sortOrder = "desc",
