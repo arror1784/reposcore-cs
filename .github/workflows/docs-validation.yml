@@ -28,7 +28,7 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Run documentation generation
+      - name: Run make 
         env:
           LANG: ko_KR.UTF-8
           LC_ALL: ko_KR.UTF-8
