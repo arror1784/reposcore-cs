@@ -22,7 +22,7 @@ namespace RepoScore.Services
         NotPlanned
     }
 
-    public class ClaimRecord
+    public class IssueRecord
     {
         public int Number { get; set; }
         public string Url { get; set; } = string.Empty;
@@ -36,7 +36,7 @@ namespace RepoScore.Services
 
     public class ClaimsData
     {
-        public Dictionary<string, List<ClaimRecord>> ClaimedMap { get; set; } = new();
+        public Dictionary<string, List<IssueRecord>> ClaimedMap { get; set; } = new();
         public List<string> UnclaimedUrls { get; set; } = new();
     }
 
@@ -137,7 +137,7 @@ namespace RepoScore.Services
         // 특정 사용자가 작성한 이슈 목록을 GraphQL로 조회.
         // "not planned", "duplicate" 사유로 닫힌 이슈는 제외.
         // since가 지정된 경우 해당 시각 이후 업데이트된 이슈만 가져옴.
-        public List<ClaimRecord> GetClaims(string authorLogin, DateTimeOffset? since = null)
+        public List<IssueRecord> GetIssues(string authorLogin, DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
             query($searchQuery: String!, $after: String) {
@@ -169,7 +169,7 @@ namespace RepoScore.Services
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
             }
 
-            var claimRecords = new List<ClaimRecord>();
+            var issueRecords = new List<IssueRecord>();
             string? cursor = null;
             bool hasNextPage = true;
 
@@ -216,7 +216,7 @@ namespace RepoScore.Services
                         var updatedAt = node.TryGetProperty("updatedAt", out var updatedElement)
                             ? DateTimeOffset.Parse(updatedElement.GetString()!) : DateTimeOffset.MinValue;
 
-                        claimRecords.Add(new ClaimRecord
+                        issueRecords.Add(new IssueRecord
                         {
                             Number = node.TryGetProperty("number", out var numEl) ? numEl.GetInt32() : 0,
                             Title = node.TryGetProperty("title", out var titEl) ? titEl.GetString() ?? "" : "",
@@ -229,7 +229,7 @@ namespace RepoScore.Services
                 }
             }
 
-            return claimRecords;
+            return issueRecords;
         }
 
         // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 조회.
@@ -284,9 +284,9 @@ namespace RepoScore.Services
                             var hasPr = issue.Number > 0 && HasLinkedPullRequest(issue.Number);
 
                             if (!claimsData.ClaimedMap.ContainsKey(login))
-                                claimsData.ClaimedMap[login] = new List<ClaimRecord>();
+                                claimsData.ClaimedMap[login] = new List<IssueRecord>();
 
-                            claimsData.ClaimedMap[login].Add(new ClaimRecord
+                            claimsData.ClaimedMap[login].Add(new IssueRecord
                             {
                                 Number = issue.Number,
                                 Url = issue.Url,

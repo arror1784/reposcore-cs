@@ -107,17 +107,17 @@ CoconaApp.Run((
 
             foreach (var user in contributors)
             {
-                var newClaims = service.GetClaims(user, since);
+                var newIssues = service.GetIssues(user, since);
                 var newPrs = service.GetPullRequests(user, since);
 
-                if (!cache.UserClaims.ContainsKey(user)) cache.UserClaims[user] = new List<ClaimRecord>();
+                if (!cache.UserIssues.ContainsKey(user)) cache.UserIssues[user] = new List<IssueRecord>();
                 if (!cache.UserPullRequests.ContainsKey(user)) cache.UserPullRequests[user] = new List<PRRecord>();
 
-                foreach (var nc in newClaims)
+                foreach (var ni in newIssues)
                 {
-                    int index = cache.UserClaims[user].FindIndex(c => c.Number == nc.Number);
-                    if (index >= 0) cache.UserClaims[user][index] = nc;
-                    else cache.UserClaims[user].Add(nc);
+                    int index = cache.UserIssues[user].FindIndex(c => c.Number == ni.Number);
+                    if (index >= 0) cache.UserIssues[user][index] = ni;
+                    else cache.UserIssues[user].Add(ni);
                 }
 
                 foreach (var npr in newPrs)
@@ -127,14 +127,14 @@ CoconaApp.Run((
                     else cache.UserPullRequests[user].Add(npr);
                 }
 
-                var userClaimsToCalc = cache.UserClaims[user];
+                var userIssuesToCalc = cache.UserIssues[user];
                 var prsToCalc = cache.UserPullRequests[user];
 
                 var featureBugPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Bug) || p.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
                 var docPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
                 var typoPrs = prsToCalc.Where(p => p.Labels.Contains(GitHubIssuePrLabel.Typo)).ToList();
-                var featureBugIssues = userClaimsToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
-                var docIssues = userClaimsToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
+                var featureBugIssues = userIssuesToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Bug) || c.Labels.Contains(GitHubIssuePrLabel.Enhancement)).ToList();
+                var docIssues = userIssuesToCalc.Where(c => c.Labels.Contains(GitHubIssuePrLabel.Documentation)).ToList();
 
                 int finalScore
                     = ScoreCalculator.CalculateFinalScore(featureBugPrs.Count, docPrs.Count, typoPrs.Count, featureBugIssues.Count, docIssues.Count);

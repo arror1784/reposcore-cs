@@ -16,7 +16,7 @@ public class CacheManagerTests
 
         Assert.Equal("owner/repo", cache.Repository);
         Assert.Equal(DateTimeOffset.MinValue, cache.LastAnalyzedAt);
-        Assert.Empty(cache.UserClaims);
+        Assert.Empty(cache.UserIssues);
         Assert.Empty(cache.UserPullRequests);
     }
 
@@ -29,11 +29,11 @@ public class CacheManagerTests
         var cache = new RepoCache
         {
             Repository = "owner/repo",
-            UserClaims =
+            UserIssues =
             {
-                ["user1"] = new List<ClaimRecord>
+                ["user1"] = new List<IssueRecord>
                 {
-                    new ClaimRecord
+                    new IssueRecord
                     {
                         Number = 333,
                         Url = "https://github.com/oss2026hnu/reposcore-cs/issues/333",
@@ -72,9 +72,9 @@ public class CacheManagerTests
         Assert.True(loadedCache.LastAnalyzedAt > DateTimeOffset.MinValue);
         Assert.True(CacheManager.HasSameKeywords(loadedCache, new[] { "할게요", "제가 하겠습니다" }));
 
-        Assert.Single(loadedCache.UserClaims["user1"]);
-        Assert.Equal(333, loadedCache.UserClaims["user1"][0].Number);
-        Assert.Contains(GitHubIssuePrLabel.Enhancement, loadedCache.UserClaims["user1"][0].Labels);
+        Assert.Single(loadedCache.UserIssues["user1"]);
+        Assert.Equal(333, loadedCache.UserIssues["user1"][0].Number);
+        Assert.Contains(GitHubIssuePrLabel.Enhancement, loadedCache.UserIssues["user1"][0].Labels);
 
         Assert.Single(loadedCache.UserPullRequests["user1"]);
         Assert.Equal(400, loadedCache.UserPullRequests["user1"][0].Number);
@@ -99,7 +99,7 @@ public class CacheManagerTests
 
         Assert.Equal("owner/new-repo", loadedCache.Repository);
         Assert.Equal(DateTimeOffset.MinValue, loadedCache.LastAnalyzedAt);
-        Assert.Empty(loadedCache.UserClaims);
+        Assert.Empty(loadedCache.UserIssues);
         Assert.Empty(loadedCache.UserPullRequests);
     }
 

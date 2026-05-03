@@ -15,7 +15,7 @@ namespace RepoScore.Data
 
         public string[]? Keywords { get; set; }
 
-        public Dictionary<string, List<ClaimRecord>> UserClaims { get; set; } = new();
+        public Dictionary<string, List<IssueRecord>> UserIssues { get; set; } = new();
 
         public Dictionary<string, List<PRRecord>> UserPullRequests { get; set; } = new();
     }
