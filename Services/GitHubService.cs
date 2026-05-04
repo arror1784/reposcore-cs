@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using Octokit;
 using Octokit.GraphQL;
 using Octokit.GraphQL.Model;
 
@@ -55,7 +54,6 @@ namespace RepoScore.Services
     public class GitHubService
     {
         private readonly Octokit.GraphQL.Connection _graphQLConnection;
-        private readonly Octokit.GitHubClient _restClient;
         private readonly string _owner;
         private readonly string _repo;
 
@@ -72,11 +70,6 @@ namespace RepoScore.Services
 
             _graphQLConnection = new Octokit.GraphQL.Connection(
                 new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"), token);
-
-            _restClient = new Octokit.GitHubClient(new Octokit.ProductHeaderValue("reposcore-cs"))
-            {
-                Credentials = new Octokit.Credentials(token)
-            };
         }
 
         // 특정 사용자가 작성하고 머지된 PR 목록을 GraphQL로 조회.
@@ -399,14 +392,47 @@ namespace RepoScore.Services
             };
         }
 
-        // REST API를 통해 저장소의 전체 기여자 로그인 ID 목록을 조회.
+        // GraphQL API를 통해 저장소의 전체 기여자 로그인 ID 목록을 조회.
         // 조회 실패 시 빈 목록을 반환.
         public List<string> GetAllContributors()
         {
             try
             {
-                var contributors = _restClient.Repository.GetAllContributors(_owner, _repo).Result;
-                return contributors.Select(c => c.Login).ToList();
+                var contributors = new List<string>();
+                string? cursor = null;
+                bool hasNextPage = true;
+
+                while (hasNextPage)
+                {
+                    var query = new Octokit.GraphQL.Query()
+                        .Repository(_repo, _owner)
+                        .DefaultBranchRef
+                        .Target
+                        .Cast<Octokit.GraphQL.Model.Commit>()
+                        .History(first: 100, after: cursor)
+                        .Select(h => new
+                        {
+                            h.PageInfo.HasNextPage,
+                            h.PageInfo.EndCursor,
+                            Items = h.Nodes.Select(c => new
+                            {
+                                AuthorLogin = c.Author.User.Login
+                            }).ToList()
+                        });
+
+                    var result = _graphQLConnection.Run(query).Result;
+
+                    contributors.AddRange(
+                        result.Items
+                            .Where(c => !string.IsNullOrEmpty(c.AuthorLogin))
+                            .Select(c => c.AuthorLogin)
+                    );
+
+                    hasNextPage = result.HasNextPage;
+                    cursor = result.EndCursor;
+                }
+
+                return contributors.Distinct().ToList();
             }
             catch (Exception ex)
             {
