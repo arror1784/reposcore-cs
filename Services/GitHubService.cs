@@ -305,17 +305,6 @@ namespace RepoScore.Services
             return claimsData;
         }
 
-        public List<string> GetPullRequestComments(int prNumber)
-        {
-            var query = new Octokit.GraphQL.Query()
-                .Repository(_repo, _owner)
-                .PullRequest(prNumber)
-                .Comments(first: 50)
-                .Nodes.Select(c => c.Body);
-
-            return _graphQLConnection.Run(query).Result.ToList();
-        }
-
         private bool HasLinkedPullRequest(int issueNumber)
         {
             try
