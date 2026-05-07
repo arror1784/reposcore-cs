@@ -250,6 +250,15 @@ namespace RepoScore.Services
                             issue.Number,
                             issue.Url,
 
+                            ConnectedPRStates = issue.TimelineItems(null, null, 10, null, null, null)
+                                .Nodes.Select(node => node.Switch<string>(item =>
+                                    item.CrossReferencedEvent(cross => 
+                                        cross.Source.Switch<string>(src => 
+                                            src.PullRequest(pr => pr.State.ToString()) // State를 문자열로 변환
+                                        )
+                                    )
+                                )).ToList(),
+
                             Labels = issue.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList(),
                             Comments = issue.Comments(10, null, null, null, null).Nodes.Select(c => new
                             {
@@ -277,7 +286,8 @@ namespace RepoScore.Services
                         {
                             var deadlineHours = IsDocumentTask(issueLabels) ? 24.0 : 48.0;
                             var remaining = comment.CreatedAt.AddHours(deadlineHours) - now;
-                            var hasPr = issue.Number > 0 && HasLinkedPullRequest(issue.Number);
+                            var hasPr = issue.ConnectedPRStates
+                                .Any(state => state == "Open" || state == "Merged");
 
                             if (!claimsData.ClaimedMap.ContainsKey(login))
                                 claimsData.ClaimedMap[login] = new List<IssueRecord>();
@@ -314,28 +324,6 @@ namespace RepoScore.Services
                 .Nodes.Select(c => c.Body);
 
             return _graphQLConnection.Run(query).Result.ToList();
-        }
-
-        private bool HasLinkedPullRequest(int issueNumber)
-        {
-            try
-            {
-                var query = new Octokit.GraphQL.Query()
-                    .Repository(_repo, _owner)
-                    .Issue(issueNumber)
-                    .TimelineItems(first: 50)
-                    .Nodes
-                    .OfType<CrossReferencedEvent>()
-                    .Select(e => e.Url);
-
-                var timelineUrls = _graphQLConnection.Run(query).Result;
-
-                return timelineUrls.Any(url => !string.IsNullOrEmpty(url) && url.Contains("/pull/"));
-            }
-            catch
-            {
-                return false;
-            }
         }
 
         internal static bool IsDocumentTask(List<GitHubIssuePrLabel> issueLabels)
