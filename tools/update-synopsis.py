@@ -13,6 +13,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+README_TEMPLATE_PATH = ROOT / "README-template.md"
 README_PATH = ROOT / "README.md"
 PROJECT_FILE = ROOT / "reposcore-cs.csproj"
 MARKER_START = "<!-- synopsis:start -->"
@@ -39,7 +40,7 @@ def capture_cli_help() -> str:
         )
         output = (proc.stdout or "") + (proc.stderr or "")
         output = output.strip()
-        if (proc.returncode == 0 or proc.returncode == 129 )and output:
+        if (proc.returncode == 0 or proc.returncode == 129) and output:
             return output
         last_error = output or f"dotnet returned exit code {proc.returncode}"
 
@@ -61,40 +62,36 @@ def build_synopsis_block(help_text: str) -> str:
     return "```text\n" + help_text.strip() + "\n```"
 
 
-def update_readme(readme_path: Path, new_block: str) -> bool:
-    """README.md의 Synopsis 마커 구간을 교체하고 변경 여부를 반환합니다."""
-    if not readme_path.exists():
-        raise FileNotFoundError(f"README.md를 찾을 수 없습니다: {readme_path}")
+def generate_readme_from_template(
+    template_path: Path,
+    readme_path: Path,
+    new_block: str,
+) -> bool:
+    """README-template.md를 기반으로 README.md를 생성하고 변경 여부를 반환합니다."""
+    if not template_path.exists():
+        raise FileNotFoundError(f"README-template.md를 찾을 수 없습니다: {template_path}")
 
-    original = readme_path.read_text(encoding="utf-8")
-    if MARKER_START not in original or MARKER_END not in original:
-        heading_match = re.search(r"^##\s+Synopsis\s*$", original, re.MULTILINE)
-        if not heading_match:
-            raise RuntimeError("README.md에서 '## Synopsis' 제목을 찾을 수 없습니다.")
+    template = template_path.read_text(encoding="utf-8")
 
-        insert_pos = heading_match.end()
-        updated = (
-            original[:insert_pos]
-            + "\n\n"
-            + MARKER_START
-            + "\n\n"
-            + new_block
-            + "\n\n"
-            + MARKER_END
-            + original[insert_pos:]
+    if MARKER_START not in template or MARKER_END not in template:
+        raise RuntimeError(
+            "README-template.md에서 synopsis 마커를 찾을 수 없습니다. "
+            f"{MARKER_START} 와 {MARKER_END} 를 추가해야 합니다."
         )
-    else:
-        pattern = re.compile(
-            rf"{re.escape(MARKER_START)}.*?{re.escape(MARKER_END)}",
-            re.DOTALL,
-        )
-        replacement = f"{MARKER_START}\n\n{new_block}\n\n{MARKER_END}"
-        updated = pattern.sub(replacement, original)
 
-    if updated == original:
+    pattern = re.compile(
+        rf"{re.escape(MARKER_START)}.*?{re.escape(MARKER_END)}",
+        re.DOTALL,
+    )
+    replacement = f"{MARKER_START}\n\n{new_block}\n\n{MARKER_END}"
+    generated = pattern.sub(replacement, template)
+
+    current = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
+
+    if generated == current:
         return False
 
-    readme_path.write_text(updated, encoding="utf-8")
+    readme_path.write_text(generated, encoding="utf-8")
     return True
 
 
@@ -105,9 +102,14 @@ def main() -> None:
 
     print("[생성] CLI 도움말을 수집했습니다.")
     print(help_text)
-    print("[업데이트] README.md의 Synopsis 섹션을 갱신합니다...")
+    print("[업데이트] README-template.md를 기반으로 README.md를 생성합니다...")
 
-    changed = update_readme(README_PATH, block)
+    changed = generate_readme_from_template(
+        README_TEMPLATE_PATH,
+        README_PATH,
+        block,
+    )
+
     if changed:
         print(f"[완료] {README_PATH}이(가) 갱신되었습니다.")
     else:

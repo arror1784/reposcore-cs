@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using Octokit;
 using Octokit.GraphQL;
 using Octokit.GraphQL.Model;
 
@@ -22,7 +21,7 @@ namespace RepoScore.Services
         NotPlanned
     }
 
-    public class ClaimRecord
+    public class IssueRecord
     {
         public int Number { get; set; }
         public string Url { get; set; } = string.Empty;
@@ -36,7 +35,7 @@ namespace RepoScore.Services
 
     public class ClaimsData
     {
-        public Dictionary<string, List<ClaimRecord>> ClaimedMap { get; set; } = new();
+        public Dictionary<string, List<IssueRecord>> ClaimedMap { get; set; } = new();
         public List<string> UnclaimedUrls { get; set; } = new();
     }
 
@@ -55,7 +54,6 @@ namespace RepoScore.Services
     public class GitHubService
     {
         private readonly Octokit.GraphQL.Connection _graphQLConnection;
-        private readonly Octokit.GitHubClient _restClient;
         private readonly string _owner;
         private readonly string _repo;
 
@@ -72,11 +70,6 @@ namespace RepoScore.Services
 
             _graphQLConnection = new Octokit.GraphQL.Connection(
                 new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"), token);
-
-            _restClient = new Octokit.GitHubClient(new Octokit.ProductHeaderValue("reposcore-cs"))
-            {
-                Credentials = new Octokit.Credentials(token)
-            };
         }
 
         // 특정 사용자가 작성하고 머지된 PR 목록을 GraphQL로 조회.
@@ -137,7 +130,7 @@ namespace RepoScore.Services
         // 특정 사용자가 작성한 이슈 목록을 GraphQL로 조회.
         // "not planned", "duplicate" 사유로 닫힌 이슈는 제외.
         // since가 지정된 경우 해당 시각 이후 업데이트된 이슈만 가져옴.
-        public List<ClaimRecord> GetClaims(string authorLogin, DateTimeOffset? since = null)
+        public List<IssueRecord> GetIssues(string authorLogin, DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
             query($searchQuery: String!, $after: String) {
@@ -169,7 +162,7 @@ namespace RepoScore.Services
                 searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
             }
 
-            var claimRecords = new List<ClaimRecord>();
+            var issueRecords = new List<IssueRecord>();
             string? cursor = null;
             bool hasNextPage = true;
 
@@ -216,7 +209,7 @@ namespace RepoScore.Services
                         var updatedAt = node.TryGetProperty("updatedAt", out var updatedElement)
                             ? DateTimeOffset.Parse(updatedElement.GetString()!) : DateTimeOffset.MinValue;
 
-                        claimRecords.Add(new ClaimRecord
+                        issueRecords.Add(new IssueRecord
                         {
                             Number = node.TryGetProperty("number", out var numEl) ? numEl.GetInt32() : 0,
                             Title = node.TryGetProperty("title", out var titEl) ? titEl.GetString() ?? "" : "",
@@ -229,7 +222,7 @@ namespace RepoScore.Services
                 }
             }
 
-            return claimRecords;
+            return issueRecords;
         }
 
         // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 조회.
@@ -284,9 +277,9 @@ namespace RepoScore.Services
                             var hasPr = issue.Number > 0 && HasLinkedPullRequest(issue.Number);
 
                             if (!claimsData.ClaimedMap.ContainsKey(login))
-                                claimsData.ClaimedMap[login] = new List<ClaimRecord>();
+                                claimsData.ClaimedMap[login] = new List<IssueRecord>();
 
-                            claimsData.ClaimedMap[login].Add(new ClaimRecord
+                            claimsData.ClaimedMap[login].Add(new IssueRecord
                             {
                                 Number = issue.Number,
                                 Url = issue.Url,
@@ -399,14 +392,47 @@ namespace RepoScore.Services
             };
         }
 
-        // REST API를 통해 저장소의 전체 기여자 로그인 ID 목록을 조회.
+        // GraphQL API를 통해 저장소의 전체 기여자 로그인 ID 목록을 조회.
         // 조회 실패 시 빈 목록을 반환.
         public List<string> GetAllContributors()
         {
             try
             {
-                var contributors = _restClient.Repository.GetAllContributors(_owner, _repo).Result;
-                return contributors.Select(c => c.Login).ToList();
+                var contributors = new List<string>();
+                string? cursor = null;
+                bool hasNextPage = true;
+
+                while (hasNextPage)
+                {
+                    var query = new Octokit.GraphQL.Query()
+                        .Repository(_repo, _owner)
+                        .DefaultBranchRef
+                        .Target
+                        .Cast<Octokit.GraphQL.Model.Commit>()
+                        .History(first: 100, after: cursor)
+                        .Select(h => new
+                        {
+                            h.PageInfo.HasNextPage,
+                            h.PageInfo.EndCursor,
+                            Items = h.Nodes.Select(c => new
+                            {
+                                AuthorLogin = c.Author.User.Login
+                            }).ToList()
+                        });
+
+                    var result = _graphQLConnection.Run(query).Result;
+
+                    contributors.AddRange(
+                        result.Items
+                            .Where(c => !string.IsNullOrEmpty(c.AuthorLogin))
+                            .Select(c => c.AuthorLogin)
+                    );
+
+                    hasNextPage = result.HasNextPage;
+                    cursor = result.EndCursor;
+                }
+
+                return contributors.Distinct().ToList();
             }
             catch (Exception ex)
             {
