@@ -16,7 +16,7 @@ namespace RepoScore.Data
             {
                 Id = r.Id,
                 IssuePr = $"{r.docIssues + r.featBugIssues}/{r.typoPrs + r.docPrs + r.featBugPrs}",
-                Score = r.Score.ToString()
+                Score = r.Score.ToString(),
                 Raw = r
             }).ToList();
 
