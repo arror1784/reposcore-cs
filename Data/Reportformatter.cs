@@ -17,6 +17,7 @@ namespace RepoScore.Data
                 Id = r.Id,
                 IssuePr = $"{r.docIssues + r.featBugIssues}/{r.typoPrs + r.docPrs + r.featBugPrs}",
                 Score = r.Score.ToString()
+                Raw = r
             }).ToList();
 
             string userHeader = "유저";
@@ -50,6 +51,21 @@ namespace RepoScore.Data
                     PadRightKorean(row.Id, userWidth) + " | " +
                     PadLeft(row.IssuePr, issuePrWidth) + " | " +
                     PadLeft(row.Score, scoreWidth));
+
+                var r = row.Raw;
+
+                int maxAdditionalPr = 3 * Math.Max(r.featBugPrs, 1);
+                int totalDocTypoPr = r.docPrs + r.typoPrs;
+                int rejectedPr = Math.Max(0, totalDocTypoPr - maxAdditionalPr);
+
+                int validPrCount = r.featBugPrs + Math.Min(totalDocTypoPr, maxAdditionalPr);
+                int maxIssueCount = 4 * validPrCount;
+                int totalIssues = r.featBugIssues + r.docIssues;
+                int rejectedIssue = Math.Max(0, totalIssues - maxIssueCount);
+
+                sb.AppendLine($"   [미인정 항목] 문서/오타 PR {rejectedPr}개 초과(한도 {maxAdditionalPr}개) / 이슈 {rejectedIssue}개 초과(한도 {maxIssueCount}개)");
+                sb.AppendLine($"   [추가 제안] 기능/버그 PR 1개 추가 시 이슈 인정 한도 +4, 문서PR 인정 한도 +3");
+                sb.AppendLine();
             }
 
             return sb.ToString();
