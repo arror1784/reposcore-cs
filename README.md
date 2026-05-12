@@ -22,13 +22,13 @@ dotnet build
 # 기본 실행 예시
 dotnet run -- oss2026hnu/reposcore-cs
 
-# 개인 액세스 토큰(PAT) 사용 예시
+# 개인 액세스 토큰(PAT) 사용 예시 (Codespaces 환경에서는 토큰 생략 가능)
 dotnet run -- oss2026hnu/reposcore-cs --token YOUR_GITHUB_TOKEN
 
 # 저장소 2개 입력 시 합산 리포트 생성 확인
 dotnet run -- oss2026hnu/reposcore-cs oss2026hnu/reposcore-ts --token YOUR_GITHUB_TOKEN
 
-# 최근 이슈 선점 현황 조회 예시 (토큰 정보 필수)
+# 최근 이슈 선점 현황 조회 예시 (Codespaces 환경에서는 토큰 생략 가능)
 dotnet run -- oss2026hnu/reposcore-cs --claims= --token YOUR_GITHUB_TOKEN      # 이슈별 (기본값)
 dotnet run -- oss2026hnu/reposcore-cs --claims=issue --token YOUR_GITHUB_TOKEN # 이슈별 (명시)
 dotnet run -- oss2026hnu/reposcore-cs --claims=user --token YOUR_GITHUB_TOKEN  # 유저별
