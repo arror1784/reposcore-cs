@@ -98,7 +98,7 @@ namespace RepoScore.Data
                         {
                             sb.AppendLine($" - {claim.Url}");
                             if (claim.Labels.Count > 0) sb.AppendLine($"   라벨: {string.Join(", ", claim.Labels)}");
-                            sb.AppendLine(claim.HasPr ? "   PR 생성됨" : FormatRemainingTime(claim.Remaining));
+                            sb.AppendLine(FormatClaimStatus(claim));
                         }
                     }
                 }
@@ -116,7 +116,7 @@ namespace RepoScore.Data
                         sb.AppendLine($" #{claim.Number} {claim.Url}");
                         sb.AppendLine($"   선점자: {login}");
                         if (claim.Labels.Count > 0) sb.AppendLine($"   라벨: {string.Join(", ", claim.Labels)}");
-                        sb.AppendLine(claim.HasPr ? "   PR 생성됨" : FormatRemainingTime(claim.Remaining));
+                        sb.AppendLine(FormatClaimStatus(claim));
                     }
                 }
 
@@ -128,6 +128,22 @@ namespace RepoScore.Data
             }
 
             return sb.ToString();
+        }
+
+        public static string FormatClaimStatus(IssueRecord claim)
+        {
+            if (!claim.HasPr)
+            {
+                return FormatRemainingTime(claim.Remaining);
+            }
+
+            if (claim.LinkedPullRequests != null && claim.LinkedPullRequests.Count > 0)
+            {
+                var prNumbers = string.Join(", ", claim.LinkedPullRequests.Select(pr => $"#{pr.Number}"));
+                return $"   PR 생성됨 - {prNumbers}";
+            }
+
+            return "   PR 생성됨";
         }
 
         public static string FormatRemainingTime(TimeSpan remaining)
