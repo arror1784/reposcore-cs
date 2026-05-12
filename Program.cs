@@ -104,12 +104,13 @@ CoconaApp.Run((
 
             // 모든 PR 데이터를 한 번에 가져와서 루프 내에서 필터링 (N+1 최적화)
             var allNewPrs = service.GetPullRequests(since);
+            var allNewIssues = service.GetIssues(since);
 
             var reportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>();
 
             foreach (var user in contributors)
             {
-                var newIssues = service.GetIssues(user, since);
+                var newIssues = allNewIssues.Where(i => i.AuthorLogin == user).ToList();
                 var newPrs = allNewPrs.Where(p => p.AuthorLogin == user).ToList();
 
                 if (!cache.UserIssues.ContainsKey(user)) cache.UserIssues[user] = new List<IssueRecord>();
