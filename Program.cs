@@ -102,12 +102,15 @@ CoconaApp.Run((
             List<string> contributors = service.GetAllContributors();
             if (contributors.Count == 0) { Console.Error.WriteLine("조회된 기여자가 없습니다."); continue; }
 
+            // 모든 PR 데이터를 한 번에 가져와서 루프 내에서 필터링 (N+1 최적화)
+            var allNewPrs = service.GetPullRequests(since);
+
             var reportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>();
 
             foreach (var user in contributors)
             {
                 var newIssues = service.GetIssues(user, since);
-                var newPrs = service.GetPullRequests(user, since);
+                var newPrs = allNewPrs.Where(p => p.AuthorLogin == user).ToList();
 
                 if (!cache.UserIssues.ContainsKey(user)) cache.UserIssues[user] = new List<IssueRecord>();
                 if (!cache.UserPullRequests.ContainsKey(user)) cache.UserPullRequests[user] = new List<PRRecord>();
