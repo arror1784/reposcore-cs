@@ -15,7 +15,7 @@ CoconaApp.Run((
 [Argument(Description = "대상 저장소 목록 (예: owner/repo1 owner/repo2)")] string[] repos,
 [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)")] string? token = null,
 [Option(Description = "최근 이슈 선점 현황 조회 (issue|user)")] string? claims = null,
-[Option('f', Description = "출력 형식 (csv, txt)")] string format = "csv",
+[Option('f', Description = "출력 형식 (csv, txt, html)")] string format = "csv",
 [Option('o', Description = "출력 디렉토리 경로")] string output = "./results",
 [Option(Description = "정렬 기준 (score | id)")] string sortBy = "score",
 [Option(Description = "정렬 방법 (asc | desc)")] string sortOrder = "desc",
@@ -26,10 +26,10 @@ CoconaApp.Run((
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     if (string.IsNullOrEmpty(token)) { Console.Error.WriteLine("오류: GitHub 토큰이 필요합니다."); return; }
 
-    var allowedFormats = new[] { "csv", "txt" };
+    var allowedFormats = new[] { "csv", "txt", "html" };
     if (!allowedFormats.Contains(format.ToLowerInvariant()))
     {
-        Console.Error.WriteLine($"오류: 지원하지 않는 형식입니다. csv 또는 txt를 입력해 주세요. (입력값: {format})");
+        Console.Error.WriteLine($"오류: 지원하지 않는 형식입니다. csv, txt, 또는 html을 입력해 주세요. (입력값: {format})");
         return;
     }
 
@@ -201,6 +201,15 @@ CoconaApp.Run((
                 File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
                 Console.Error.WriteLine($"가독성 리포트(TXT) 추가 저장 완료: {txtPath}");
             }
+
+            // HTML 리포트 생성
+            if (format.ToLower() == "html")
+            {
+                string htmlPath = Path.Combine(repoOutput, "results.html");
+                string htmlContent = ReportFormatter.BuildHtmlReport(repo, reportData);
+                File.WriteAllText(htmlPath, htmlContent, Encoding.UTF8);
+                Console.Error.WriteLine($"HTML 리포트 추가 저장 완료: {htmlPath}");
+            }
         }
         catch (Exception ex)
         {
@@ -257,6 +266,16 @@ CoconaApp.Run((
                 string totalTxtContent = ReportFormatter.BuildTextReport(totalLabel, totalReportData);
                 File.WriteAllText(totalTxtPath, totalTxtContent, Encoding.UTF8);
                 Console.Error.WriteLine($"전체 합산 리포트(TXT) 저장 완료: {totalTxtPath}");
+            }
+
+            // 합산 HTML
+            if (format.ToLower() == "html")
+            {
+                string totalLabel = string.Join(" + ", repos);
+                string totalHtmlPath = Path.Combine(totalOutput, "results.html");
+                string totalHtmlContent = ReportFormatter.BuildHtmlReport(totalLabel, totalReportData);
+                File.WriteAllText(totalHtmlPath, totalHtmlContent, Encoding.UTF8);
+                Console.Error.WriteLine($"전체 합산 HTML 리포트 저장 완료: {totalHtmlPath}");
             }
         }
         catch (Exception ex)

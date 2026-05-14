@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using RepoScore.Services;
+using System.Text.Json;
 
 namespace RepoScore.Data
 {
@@ -91,6 +92,67 @@ namespace RepoScore.Data
             }
 
             return sb.ToString();
+        }
+
+        public static string BuildHtmlReport(string repoName, List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData)
+        {
+            var labels = JsonSerializer.Serialize(reportData.Select(r => $"{r.Id} (점수: {r.Score})"));
+            var featBugPrData = JsonSerializer.Serialize(reportData.Select(r => r.featBugPrs));
+            var docPrData = JsonSerializer.Serialize(reportData.Select(r => r.docPrs));
+            var typoPrData = JsonSerializer.Serialize(reportData.Select(r => r.typoPrs));
+            var featBugIssueData = JsonSerializer.Serialize(reportData.Select(r => r.featBugIssues));
+            var docIssueData = JsonSerializer.Serialize(reportData.Select(r => r.docIssues));
+
+            int chartHeight = Math.Max(400, reportData.Count * 30);
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""ko"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>RepoScore Report - {repoName}</title>
+    <script src=""https://cdn.jsdelivr.net/npm/chart.js""></script>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, ""Segoe UI"", Helvetica, Arial, sans-serif, ""Apple Color Emoji"", ""Segoe UI Emoji""; margin: 2em; background-color: #f6f8fa; color: #24292e; }}
+        h1 {{ border-bottom: 1px solid #e1e4e8; padding-bottom: 0.3em; }}
+        .chart-container {{ position: relative; height: {chartHeight}px; width: 90vw; margin-top: 2em; background-color: #fff; border: 1px solid #e1e4e8; border-radius: 6px; padding: 1em; }}
+    </style>
+</head>
+<body>
+    <h1>RepoScore Report: {repoName}</h1>
+    <div class=""chart-container"">
+        <canvas id=""contributionChart""></canvas>
+    </div>
+    <script>
+        const ctx = document.getElementById('contributionChart');
+        new Chart(ctx, {{
+            type: 'bar',
+            data: {{
+                labels: {labels},
+                datasets: [
+                    {{ label: '문서 이슈', data: {docIssueData}, backgroundColor: '#a2eeef' }},
+                    {{ label: '기능/버그 이슈', data: {featBugIssueData}, backgroundColor: '#28a745' }},
+                    {{ label: '오타 PR', data: {typoPrData}, backgroundColor: '#fbca04' }},
+                    {{ label: '문서 PR', data: {docPrData}, backgroundColor: '#0366d6' }},
+                    {{ label: '기능/버그 PR', data: {featBugPrData}, backgroundColor: '#d73a49' }}
+                ]
+            }},
+            options: {{
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {{ x: {{ stacked: true }}, y: {{ stacked: true }} }},
+                plugins: {{
+                    title: {{ display: true, text: '사용자별 기여 항목 분포' }},
+                    legend: {{ position: 'top' }}
+                }}
+            }}
+        }});
+    </script>
+</body>
+</html>
+";
         }
 
         public static string BuildClaimsReport(ClaimsData data, string mode)

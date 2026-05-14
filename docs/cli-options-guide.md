@@ -140,13 +140,17 @@ dotnet run -- oss2026hnu/reposcore-cs --claims user --token ghp_xxxxx
 
 - `csv`: `results/results.csv` 파일 생성 (기본)
 - `txt`: `results/results.csv` + `results/results.txt` 파일 함께 생성
+- `html`: `results/results.csv` + `results/results.html` 파일 함께 생성 (차트 포함)
 
 ```bash
 # CSV만 생성 (기본값)
 dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx
 
 # CSV + TXT 함께 생성
-dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx --format txt
+dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx --format=txt
+
+# CSV + HTML 차트 리포트 함께 생성
+dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx --format=html
 
 # 단축 옵션
 dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx -f txt
