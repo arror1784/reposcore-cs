@@ -60,17 +60,6 @@ CoconaApp.Run((
 
         try
         {
-            if (claims != null)
-            {
-                AnsiConsole.MarkupLine($"[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
-                var mode = string.IsNullOrEmpty(claims) ? "issue" : claims;
-
-                var claimsData = service.GetRecentClaimsData();
-                var report = ReportFormatter.BuildClaimsReport(claimsData, mode);
-                Console.Write(report);
-                continue;
-            }
-
             AnsiConsole.MarkupLine($"[yellow]{repo}[/] 기여자 데이터 수집 및 분석 중...");
 
             if (!Directory.Exists(repoOutput)) Directory.CreateDirectory(repoOutput);
@@ -217,8 +206,8 @@ CoconaApp.Run((
         }
     }
 
-    // 저장소가 2개 이상이고 claims 모드가 아닐 때만 전체 합산 리포트 생성
-    if (repos.Length > 1 && claims == null && (totalUserIssues.Count > 0 || totalUserPullRequests.Count > 0))
+    // 저장소가 1개 이상일 때 전체 합산 리포트 생성
+    if (repos.Length > 1 && (totalUserIssues.Count > 0 || totalUserPullRequests.Count > 0))
     {
         try
         {
@@ -281,6 +270,34 @@ CoconaApp.Run((
         catch (Exception ex)
         {
             AnsiConsole.WriteException(ex);
+        }
+    }
+
+    // 모든 점수 계산 및 리포트 출력이 끝난 후, 이슈 선점 현황을 일괄 조회 및 출력
+    if (claims != null)
+    {
+        foreach (var repo in repos)
+        {
+            var parts = repo.Split('/');
+            if (parts.Length != 2) continue; // 포맷 오류는 위쪽 점수 계산 루프에서 이미 경고됨
+
+            string ownerName = parts[0];
+            string repoName = parts[1];
+            var service = new GitHubService(ownerName, repoName, token, parsedKeywords);
+
+            try
+            {
+                AnsiConsole.MarkupLine($"\n[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
+                var mode = string.IsNullOrEmpty(claims) ? "issue" : claims;
+
+                var claimsData = service.GetRecentClaimsData();
+                var report = ReportFormatter.BuildClaimsReport(claimsData, mode);
+                Console.Write(report);
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.WriteException(ex);
+            }
         }
     }
 });
