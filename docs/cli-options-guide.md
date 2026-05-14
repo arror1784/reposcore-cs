@@ -112,20 +112,20 @@ dotnet run -- oss2026hnu/reposcore-cs
 | 항목 | 내용 |
 |---|---|
 | 허용 값 | `issue` (이슈별 표시), `user` (유저별 표시) |
-| 기본값 | `issue` (값 없이 `--claims=`만 입력 시) |
+| 기본값 | `issue` (값 없이 `--claims`만 입력 시) |
 
 ```bash
 # 이슈별 선점 현황 (기본값)
-dotnet run -- oss2026hnu/reposcore-cs --claims= --token ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims --token ghp_xxxxx
 
 # 이슈별 선점 현황 (명시)
-dotnet run -- oss2026hnu/reposcore-cs --claims=issue --token ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims issue --token ghp_xxxxx
 
 # 유저별 선점 현황
-dotnet run -- oss2026hnu/reposcore-cs --claims=user --token ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims user --token ghp_xxxxx
 ```
 
-> ⚠️  `--claims=issue` 또는 `--claims issue` 형식 모두 사용 가능합니다.
+> ⚠️ `--claims issue` 또는 `--claims user` 형식으로 사용할 수 있습니다.
 
 ---
 
@@ -270,10 +270,10 @@ dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx --sort-by score --sort-order 
 
 ```bash
 # 이슈별 조회 (기본)
-dotnet run -- oss2026hnu/reposcore-cs --claims= -t ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims -t ghp_xxxxx
 
 # 유저별 조회
-dotnet run -- oss2026hnu/reposcore-cs --claims=user -t ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims user -t ghp_xxxxx
 ```
 
 ### 출력 경로 + 커스텀 키워드
