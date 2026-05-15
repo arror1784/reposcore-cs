@@ -58,7 +58,7 @@ CoconaApp.Run((
                 AnsiConsole.MarkupLine($"[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
 
                 var claimsData = service.GetRecentClaimsData();
-                var report = ReportFormatter.BuildClaimsReport(claimsData, claims.Value);
+                var report = ReportFormatter.BuildClaimsReport(claimsData, (ClaimsMode)claims);
                 Console.Write(report);
                 continue;
             }
@@ -291,10 +291,8 @@ CoconaApp.Run((
             try
             {
                 AnsiConsole.MarkupLine($"\n[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
-                var mode = string.IsNullOrEmpty(claims) ? "issue" : claims;
-
                 var claimsData = service.GetRecentClaimsData();
-                var report = ReportFormatter.BuildClaimsReport(claimsData, mode);
+                var report = ReportFormatter.BuildClaimsReport(claimsData, claims.GetValueOrDefault(ClaimsMode.Issue));
                 Console.Write(report);
             }
             catch (Exception ex)
