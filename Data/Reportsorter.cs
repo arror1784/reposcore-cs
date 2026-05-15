@@ -3,23 +3,24 @@ using System.Linq;
 
 namespace RepoScore.Data
 {
+    public enum SortBy { Score, Id }
+
+    public enum SortOrder { Asc, Desc }
+
     public static class ReportSorter
     {
         public static List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>
         SortReportData(
             List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> data,
-            string sortBy,
-            string sortOrder)
+            SortBy sortBy,
+            SortOrder sortOrder)
         {
-            return sortBy.ToLower() switch
+            return sortBy switch
             {
-                "score" => sortOrder.ToLower() == "asc"
-                    ? data.OrderBy(x => x.Score).ToList()
-                    : data.OrderByDescending(x => x.Score).ToList(),
-                "id" => sortOrder.ToLower() == "asc"
+                SortBy.Id => sortOrder == SortOrder.Asc
                     ? data.OrderBy(x => x.Id).ToList()
                     : data.OrderByDescending(x => x.Id).ToList(),
-                _ => sortOrder.ToLower() == "asc"
+                _ => sortOrder == SortOrder.Asc
                     ? data.OrderBy(x => x.Score).ToList()
                     : data.OrderByDescending(x => x.Score).ToList()
             };

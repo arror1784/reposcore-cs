@@ -29,7 +29,7 @@ public class ReportFormatterTests
             }
         };
 
-        string report = ReportFormatter.BuildClaimsReport(data, "repo");
+        string report = ReportFormatter.BuildClaimsReport(data, ClaimsMode.Issue);
 
         Assert.Contains("PR 생성됨 - #393", report);
     }

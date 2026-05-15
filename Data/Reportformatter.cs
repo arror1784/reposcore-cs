@@ -7,6 +7,10 @@ using System.Text.Json;
 
 namespace RepoScore.Data
 {
+    public enum OutputFormat { Csv, Txt, Html }
+
+    public enum ClaimsMode { Issue, User }
+
     public static class ReportFormatter
     {
         public static string BuildTextReport(
@@ -155,7 +159,7 @@ namespace RepoScore.Data
 ";
         }
 
-        public static string BuildClaimsReport(ClaimsData data, string mode)
+        public static string BuildClaimsReport(ClaimsData data, ClaimsMode mode)
         {
             var sb = new StringBuilder();
 
@@ -164,7 +168,7 @@ namespace RepoScore.Data
                 return "최근 48시간 내 선점된 이슈가 없습니다.\n";
             }
 
-            if (mode == "user")
+            if (mode == ClaimsMode.User)
             {
                 if (data.UnclaimedUrls.Count > 0)
                 {
