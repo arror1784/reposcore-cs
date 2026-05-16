@@ -18,6 +18,16 @@ namespace RepoScore.Data
         public Dictionary<string, List<IssueRecord>> UserIssues { get; set; } = new();
 
         public Dictionary<string, List<PRRecord>> UserPullRequests { get; set; } = new();
+
+        // Claims 조회용 캐시: 열린 이슈 목록 (CachedClaimComments 포함)
+        // --claims 옵션 실행 시 증분 갱신에 활용됨
+        public List<IssueRecord> CachedOpenIssues { get; set; } = new();
+
+        // Claims 조회용 캐시: 열린 PR 목록 (LinkedIssueNumbers 포함)
+        public List<PRRecord> CachedOpenPrs { get; set; } = new();
+
+        // Claims 캐시의 마지막 갱신 시각 (--claims 전용, LastAnalyzedAt과 별도 관리)
+        public DateTimeOffset LastClaimsAnalyzedAt { get; set; } = DateTimeOffset.MinValue;
     }
 
     // 캐시 파일의 로드 및 저장을 담당하는 클래스.
@@ -74,6 +84,28 @@ namespace RepoScore.Data
 
             cacheData.LastAnalyzedAt = DateTimeOffset.UtcNow;
             cacheData.Keywords = keywords;
+
+            string json = JsonSerializer.Serialize(cacheData, s_jsonOptions);
+            File.WriteAllText(cacheFilePath, json);
+        }
+
+        // Claims 캐시(열린 이슈/PR)를 캐시 파일에 저장.
+        // LastAnalyzedAt은 건드리지 않고 LastClaimsAnalyzedAt만 갱신.
+        public static void SaveClaimsCache(
+            string cacheFilePath,
+            RepoCache cacheData,
+            List<IssueRecord> openIssues,
+            List<PRRecord> openPrs)
+        {
+            var dir = Path.GetDirectoryName(cacheFilePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            cacheData.CachedOpenIssues = openIssues;
+            cacheData.CachedOpenPrs = openPrs;
+            cacheData.LastClaimsAnalyzedAt = DateTimeOffset.UtcNow;
 
             string json = JsonSerializer.Serialize(cacheData, s_jsonOptions);
             File.WriteAllText(cacheFilePath, json);

@@ -53,13 +53,35 @@ CoconaApp.Run((
 
         try
         {
+            // ── Claims 전용 모드 ──────────────────────────────────────────────────
             if (claims != null)
             {
                 AnsiConsole.MarkupLine($"[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
 
-                var claimsData = service.GetRecentClaimsData();
+                // noCache면 전체 재조회, 아니면 LastClaimsAnalyzedAt 기준 증분 조회
+                DateTimeOffset? claimsSince = (!noCache && cache.LastClaimsAnalyzedAt != DateTimeOffset.MinValue)
+                    ? cache.LastClaimsAnalyzedAt
+                    : (DateTimeOffset?)null;
+
+                if (claimsSince.HasValue)
+                    Console.Error.WriteLine($"Claims 캐시 존재: {claimsSince.Value.ToLocalTime():yyyy-MM-dd HH:mm} — 이후 변경분만 재조회합니다.");
+                else
+                    Console.Error.WriteLine("Claims 캐시 없음: 전체 데이터를 수집합니다.");
+
+                var cachedOpenIssues = cache.CachedOpenIssues.Count > 0 ? cache.CachedOpenIssues : null;
+                var cachedOpenPrs = cache.CachedOpenPrs.Count > 0 ? cache.CachedOpenPrs : null;
+
+                // GetRecentClaimsData가 조회 + 캐시 갱신 데이터를 한 번에 반환
+                // → 추가 API 호출 없이 캐시 저장 가능
+                var (claimsData, updatedOpenIssues, updatedOpenPrs) = service.GetRecentClaimsData(
+                    cachedOpenIssues, cachedOpenPrs, claimsSince);
+
                 var report = ReportFormatter.BuildClaimsReport(claimsData, (ClaimsMode)claims);
                 Console.Write(report);
+
+                CacheManager.SaveClaimsCache(cachePath, cache, updatedOpenIssues, updatedOpenPrs);
+                Console.Error.WriteLine($"Claims 캐시 갱신 완료: {cachePath}");
+
                 continue;
             }
 
@@ -273,32 +295,6 @@ CoconaApp.Run((
         catch (Exception ex)
         {
             AnsiConsole.WriteException(ex);
-        }
-    }
-
-    // 모든 점수 계산 및 리포트 출력이 끝난 후, 이슈 선점 현황을 일괄 조회 및 출력
-    if (claims != null)
-    {
-        foreach (var repo in repos)
-        {
-            var parts = repo.Split('/');
-            if (parts.Length != 2) continue; // 포맷 오류는 위쪽 점수 계산 루프에서 이미 경고됨
-
-            string ownerName = parts[0];
-            string repoName = parts[1];
-            var service = new GitHubService(ownerName, repoName, token, parsedKeywords);
-
-            try
-            {
-                AnsiConsole.MarkupLine($"\n[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
-                var claimsData = service.GetRecentClaimsData();
-                var report = ReportFormatter.BuildClaimsReport(claimsData, claims.GetValueOrDefault(ClaimsMode.Issue));
-                Console.Write(report);
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.WriteException(ex);
-            }
         }
     }
 });
