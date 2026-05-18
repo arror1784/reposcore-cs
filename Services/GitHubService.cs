@@ -73,6 +73,8 @@ namespace RepoScore.Services
         public List<int> LinkedIssueNumbers { get; set; } = new();
     }
 
+    // GitHub REST/GraphQL API를 통해 저장소 데이터를 조회하는 서비스 클래스.
+    // PR 조회, 이슈 조회, 기여자 목록 조회, 이슈 선점 현황 조회 기능을 담당.
     public class GitHubService
     {
         private readonly Octokit.GraphQL.Connection _graphQLConnection;
@@ -101,10 +103,10 @@ namespace RepoScore.Services
             {
                 var query = new Octokit.GraphQL.Query()
                     .Repository(_repo, _owner)
-                    .Select(r => r.Id);
+                    .Select(r => r.Name);
 
                 var result = _graphQLConnection.Run(query).Result;
-                return result != null;
+                return !string.IsNullOrEmpty(result);
             }
             catch
             {
@@ -112,6 +114,8 @@ namespace RepoScore.Services
             }
         }
 
+        // 저장소의 머지된 전체 PR 목록을 GraphQL로 조회.
+        // since가 지정된 경우 해당 시각 이후 업데이트된 PR만 가져옴.
         public List<PRRecord> GetPullRequests(DateTimeOffset? since = null)
         {
             string searchString = $"repo:{_owner}/{_repo} is:pr is:merged";
@@ -167,6 +171,9 @@ namespace RepoScore.Services
             return prRecords;
         }
 
+        // 저장소의 전체 이슈 목록을 GraphQL로 조회.
+        // "not planned", "duplicate" 사유로 닫힌 이슈는 제외.
+        // since가 지정된 경우 해당 시각 이후 업데이트된 이슈만 가져옴.
         public List<IssueRecord> GetIssues(DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
@@ -277,6 +284,7 @@ namespace RepoScore.Services
             return issueRecords;
         }
 
+        // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 조회.
         public (ClaimsData claimsData, List<IssueRecord> updatedOpenIssues, List<PRRecord> updatedOpenPrs)
             GetRecentClaimsData(
                 List<IssueRecord>? cachedOpenIssues = null,
@@ -373,6 +381,7 @@ namespace RepoScore.Services
             return (claimsData, updatedOpenIssues, updatedOpenPrs);
         }
 
+        // 열린 이슈와 선점 댓글을 함께 조회.
         private (List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)
             FetchOpenIssuesWithClaimComments(DateTimeOffset? since = null)
         {
@@ -514,6 +523,7 @@ namespace RepoScore.Services
             return (openIssues, closedIssueNumbers);
         }
 
+        // since 이후 업데이트된 열린 PR과 본문에서 파싱한 연결 이슈 번호 목록을 반환.
         public List<PRWithLinkedIssues> GetOpenPullRequestsWithLinkedIssues(DateTimeOffset? since = null)
         {
             var prsWithIssues = new List<PRWithLinkedIssues>();
