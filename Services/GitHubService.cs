@@ -43,9 +43,6 @@ namespace RepoScore.Services
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
         public DateTimeOffset UpdatedAt { get; set; }
 
-        // 캐시용: 최근 48시간 내 선점 키워드가 포함된 댓글 목록.
-        // null이면 캐시 미보유, 빈 리스트면 선점 댓글 없음을 의미.
-        // null일 때 직렬화 생략 → 기여도 분석 캐시(UserIssues)의 크기에 영향 없음.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ClaimComment>? CachedClaimComments { get; set; } = null;
     }
@@ -66,8 +63,6 @@ namespace RepoScore.Services
         public List<GitHubIssuePrLabel> Labels { get; set; } = new();
         public DateTimeOffset UpdatedAt { get; set; }
 
-        // Claims 캐시용: PR에 연결된 이슈 번호 목록.
-        // 빈 리스트일 때 직렬화 생략 → 기여도 분석 캐시(UserPullRequests)의 크기에 영향 없음.
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public List<int> LinkedIssueNumbers { get; set; } = new();
     }
@@ -161,10 +156,14 @@ namespace RepoScore.Services
         // 저장소의 전체 이슈 목록을 GraphQL로 조회.
         // "not planned", "duplicate" 사유로 닫힌 이슈는 제외.
         // since가 지정된 경우 해당 시각 이후 업데이트된 이슈만 가져옴.
+        // repository 필드를 search와 함께 요청하여 존재하지 않는 저장소면 예외 발생.
         public List<IssueRecord> GetIssues(DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
-            query($searchQuery: String!, $after: String) {
+            query($owner: String!, $repoName: String!, $searchQuery: String!, $after: String) {
+                repository(owner: $owner, name: $repoName) {
+                    id
+                }
                 search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
                     pageInfo {
                         hasNextPage
@@ -205,15 +204,27 @@ namespace RepoScore.Services
                 var requestPayload = JsonSerializer.Serialize(new
                 {
                     query = rawGraphQl,
-                    variables = new Dictionary<string, object>
+                    variables = new Dictionary<string, object?>
                     {
+                        ["owner"] = _owner,
+                        ["repoName"] = _repo,
                         ["searchQuery"] = searchString,
-                        ["after"] = cursor!
+                        ["after"] = cursor
                     }
                 });
 
                 var rawResponse = _graphQLConnection.Run(requestPayload).Result;
                 using var document = JsonDocument.Parse(rawResponse);
+
+                // errors 필드가 있으면 저장소 없음 등의 오류 → 예외로 전달
+                if (document.RootElement.TryGetProperty("errors", out var errorsElement))
+                {
+                    var firstError = errorsElement.EnumerateArray().FirstOrDefault();
+                    var message = firstError.TryGetProperty("message", out var msgEl)
+                        ? msgEl.GetString() ?? "알 수 없는 오류"
+                        : "알 수 없는 오류";
+                    throw new InvalidOperationException(message);
+                }
 
                 if (!document.RootElement.TryGetProperty("data", out var dataElement) ||
                     !dataElement.TryGetProperty("search", out var searchElement))
@@ -272,13 +283,6 @@ namespace RepoScore.Services
         }
 
         // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 조회.
-        //
-        // cachedOpenIssues: 이전 실행에서 캐시된 열린 이슈 목록 (CachedClaimComments 포함).
-        // cachedOpenPrs:    이전 실행에서 캐시된 열린 PR 목록 (LinkedIssueNumbers 포함).
-        // since: 마지막 Claims 캐시 갱신 시각. 이 시각 이후 업데이트된 항목만 재조회.
-        //
-        // API 호출을 최소화하기 위해 갱신된 이슈/PR을 함께 반환.
-        // 호출 측에서 반환값을 SaveClaimsCache에 그대로 전달하면 추가 API 호출 없이 캐시 저장 가능.
         public (ClaimsData claimsData, List<IssueRecord> updatedOpenIssues, List<PRRecord> updatedOpenPrs)
             GetRecentClaimsData(
                 List<IssueRecord>? cachedOpenIssues = null,
@@ -288,8 +292,6 @@ namespace RepoScore.Services
             var now = DateTimeOffset.UtcNow;
             bool isFullRefresh = since == null || (now - since.Value).TotalHours > 48;
 
-            // ── 1. 열린 PR 갱신 (API 호출 1회) ───────────────────────────────────
-            // 전체 재조회면 since=null로 전체를 가져오고, 증분이면 since 이후만 가져옴.
             var freshOpenPrs = GetOpenPullRequestsWithLinkedIssues(isFullRefresh ? null : since);
 
             List<PRRecord> updatedOpenPrs;
@@ -303,7 +305,6 @@ namespace RepoScore.Services
             }
             else
             {
-                // 증분: 캐시에 fresh 결과를 병합
                 updatedOpenPrs = new List<PRRecord>(cachedOpenPrs);
                 foreach (var freshPrWithLinks in freshOpenPrs)
                 {
@@ -317,19 +318,16 @@ namespace RepoScore.Services
                 }
             }
 
-            // ── 2. 열린 이슈 갱신 (API 호출 1회) ─────────────────────────────────
             var (freshIssues, closedIssueNumbers) = FetchOpenIssuesWithClaimComments(
                 isFullRefresh ? null : since);
 
             List<IssueRecord> updatedOpenIssues;
             if (isFullRefresh || cachedOpenIssues == null)
             {
-                // 전체 재조회: fresh 결과가 현재 열린 이슈 전체
                 updatedOpenIssues = freshIssues;
             }
             else
             {
-                // 증분: 캐시에 병합하고, since 이후 닫힌 이슈는 제거
                 var openIssueDict = cachedOpenIssues.ToDictionary(i => i.Number);
                 foreach (var freshIssue in freshIssues)
                     openIssueDict[freshIssue.Number] = freshIssue;
@@ -338,7 +336,6 @@ namespace RepoScore.Services
                 updatedOpenIssues = openIssueDict.Values.ToList();
             }
 
-            // ── 3. Claims 판단 ────────────────────────────────────────────────────
             var claimsData = new ClaimsData();
 
             foreach (var issue in updatedOpenIssues)
@@ -383,11 +380,6 @@ namespace RepoScore.Services
         }
 
         // 열린 이슈와 선점 댓글을 함께 조회.
-        // since가 있으면 해당 시각 이후 업데이트된 이슈만 가져옴.
-        //
-        // 반환: (열린 이슈 목록, since 이후 닫힌 이슈 번호 집합)
-        // 닫힌 이슈 번호 집합: since 이후 업데이트된 이슈를 별도 쿼리로 조회하여
-        //                      열린 이슈 목록에 없는 번호를 닫힌 것으로 판단.
         private (List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)
             FetchOpenIssuesWithClaimComments(DateTimeOffset? since = null)
         {
@@ -397,12 +389,9 @@ namespace RepoScore.Services
             bool hasNextPage = true;
             var now = DateTimeOffset.UtcNow;
 
-            // since 이후 업데이트된 이슈 번호 전체 (열린 것 + 닫힌 것) 수집용
-            // → 열린 이슈 조회 결과와 비교해 닫힌 이슈를 판별
             var updatedIssueNumbers = new HashSet<int>();
             if (since.HasValue)
             {
-                // 검색 API로 since 이후 업데이트된 모든 이슈 번호 수집 (열림/닫힘 구분 없음)
                 const string allIssuesQuery = @"
                 query($searchQuery: String!, $after: String) {
                     search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
@@ -451,7 +440,6 @@ namespace RepoScore.Services
                 }
             }
 
-            // 열린 이슈 + 댓글 조회
             while (hasNextPage)
             {
                 var query = new Octokit.GraphQL.Query()
@@ -484,7 +472,6 @@ namespace RepoScore.Services
 
                 foreach (var issue in result.Items)
                 {
-                    // UpdatedAt 내림차순이므로 since 이전 항목이 나오면 조기 종료
                     if (since.HasValue && issue.UpdatedAt < since.Value)
                     {
                         hasNextPage = false;
@@ -521,7 +508,6 @@ namespace RepoScore.Services
                 cursor = result.EndCursor;
             }
 
-            // since 이후 업데이트됐지만 열린 이슈 목록에 없는 것 = 닫힌 이슈
             if (since.HasValue)
             {
                 var openNumbers = openIssues.Select(i => i.Number).ToHashSet();
@@ -536,7 +522,6 @@ namespace RepoScore.Services
         }
 
         // since 이후 업데이트된 열린 PR과 본문에서 파싱한 연결 이슈 번호 목록을 반환.
-        // since가 null이면 전체 열린 PR을 조회.
         public List<PRWithLinkedIssues> GetOpenPullRequestsWithLinkedIssues(DateTimeOffset? since = null)
         {
             var prsWithIssues = new List<PRWithLinkedIssues>();

@@ -12,24 +12,17 @@ using System.Globalization;
 
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("en-US");
 
-// repos 인자가 없으면 Cocona가 자체적으로 에러 처리하므로,
-// 여기서는 repos 형식('owner/repo') 검증만 담당한다.
-// 검증 실패 시: 오류 메시지 일괄 출력 → help 출력(Cocona 내부 렌더러 재사용) → exit code 1.
 var formatErrors = new List<string>();
-// Cocona의 파라미터 파싱 규칙에 따라 positional argument(repos)는
-// 옵션 플래그(--)나 옵션값과 구분해야 한다.
-// "-"로 시작하지 않고, 바로 앞 인자가 값을 받는 옵션이 아닌 경우만 repo 후보로 간주한다.
-// 가장 안전한 방법: "--" 이후 또는 알려진 옵션 플래그 목록 외의 인자만 추출.
 var knownValueOptions = new HashSet<string> { "-t", "--token", "--claims", "-f", "--format", "-o", "--output", "--sort-by", "--sort-order", "--keywords" };
 var repoArgs = new List<string>();
 for (int i = 0; i < args.Length; i++)
 {
     if (knownValueOptions.Contains(args[i]))
     {
-        i++; // 다음 인자는 옵션 값이므로 건너뜀
+        i++;
         continue;
     }
-    if (args[i].StartsWith("-")) continue; // 플래그 옵션 건너뜀
+    if (args[i].StartsWith("-")) continue;
     repoArgs.Add(args[i]);
 }
 
@@ -98,7 +91,6 @@ CoconaApp.Run((
             {
                 AnsiConsole.MarkupLine($"[[[blue]{ownerName}/{repoName}[/]]] 최근 이슈 선점 현황을 조회합니다...\n");
 
-                // noCache면 전체 재조회, 아니면 LastClaimsAnalyzedAt 기준 증분 조회
                 DateTimeOffset? claimsSince = (!noCache && cache.LastClaimsAnalyzedAt != DateTimeOffset.MinValue)
                     ? cache.LastClaimsAnalyzedAt
                     : (DateTimeOffset?)null;
@@ -111,8 +103,6 @@ CoconaApp.Run((
                 var cachedOpenIssues = cache.CachedOpenIssues.Count > 0 ? cache.CachedOpenIssues : null;
                 var cachedOpenPrs = cache.CachedOpenPrs.Count > 0 ? cache.CachedOpenPrs : null;
 
-                // GetRecentClaimsData가 조회 + 캐시 갱신 데이터를 한 번에 반환
-                // → 추가 API 호출 없이 캐시 저장 가능
                 var (claimsData, updatedOpenIssues, updatedOpenPrs) = service.GetRecentClaimsData(
                     cachedOpenIssues, cachedOpenPrs, claimsSince);
 
@@ -154,7 +144,7 @@ CoconaApp.Run((
             }
 
             var allNewPrs = service.GetPullRequests(since);
-            var allNewIssues = service.GetIssues(since);
+            var allNewIssues = service.GetIssues(since); // 존재하지 않는 저장소면 여기서 예외 발생
 
             List<string> contributors = allNewPrs.Select(p => p.AuthorLogin)
                 .Concat(allNewIssues.Select(i => i.AuthorLogin))
@@ -259,6 +249,14 @@ CoconaApp.Run((
         }
         catch (Exception ex)
         {
+            // 저장소가 존재하지 않는 경우 예외 메시지로 판단
+            if (ex.Message.Contains("Could not resolve to a Repository") ||
+                (ex.InnerException?.Message.Contains("Could not resolve to a Repository") == true))
+            {
+                Console.Error.WriteLine($"오류: '{repo}' 저장소가 존재하지 않거나 접근할 수 없습니다.");
+                Environment.Exit(1);
+                return;
+            }
             AnsiConsole.WriteException(ex);
         }
     }
@@ -327,11 +325,6 @@ CoconaApp.Run((
     }
 });
 
-// ── help 출력 헬퍼 ────────────────────────────────────────────────────────────
-// Cocona는 --help 처리 시 내부 ICoconaHelpRenderer를 통해 help 텍스트를 생성하고
-// stdout으로 출력한 뒤 종료한다. 검증 실패 시 현재 어셈블리를 --help로 재실행하여
-// Cocona가 생성한 help 결과를 그대로 stderr로 리디렉션함으로써
-// 코드 중복 없이 단일 지점에서 일관된 help 출력을 보장한다.
 static void ShowHelp()
 {
     try
