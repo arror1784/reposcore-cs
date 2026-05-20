@@ -23,6 +23,20 @@ VSCode에서 C# 개발을 시작할 때 필요한 확장 프로그램과 설치 
 - **솔루션 탐색기 지원**: Visual Studio처럼 솔루션(`.sln`) 및 프로젝트(`.csproj`) 단위로 파일과 참조를 직관적으로 관리  
 - **고급 언어 서비스**: 향상된 IntelliSense, 코드 분석, AI 기반 코드 추천(IntelliCode) 제공  
 - **통합 테스트 환경**: Test Explorer를 통해 xUnit, NUnit, MSTest 기반 단위 테스트를 코드 위에서 바로 실행 및 디버깅 가능  
+- **XML 문서 주석(Standard XML Documentation) 자동 생성**: 메서드, 클래스, 인터페이스 직관 위에 `///`을 입력하면 `<summary>`, `<param>`, `<returns>` 등 XML 주석 템플릿이 자동으로 생성
+
+> **XML 문서 주석 사용 예시**
+> ```csharp
+> /// <summary>
+> /// 사용자의 기여도 데이터를 기반으로 최종 점수를 산출합니다.
+> /// </summary>
+> /// <param name="repoData">저장소별 상세 기여 데이터</param>
+> /// <returns>산출된 최종 집계 점수</returns>
+> public int CalculateUserScores(DetailedRepoData repoData)
+> {
+>     // 로직 구현부
+> }
+> ```
 
 ---
 
