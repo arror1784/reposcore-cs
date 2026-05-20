@@ -3,6 +3,7 @@
 ### 문서 목록
 
 <!-- DOC_LIST_START -->
+
 - [cli-options-guide.md](./cli-options-guide.md): CLI 옵션 사용 가이드
 - [cocona-guide.md](./cocona-guide.md): Cocona 라이브러리 가이드
 - [csharp-convention.md](./csharp-convention.md): C# 코딩 컨벤션 가이드
@@ -20,7 +21,7 @@
 
 > ⚠️**아래 상황이 발생하면 반드시 스크립트를 통해 목록을 자동 갱신해줘야 합니다.**
 >
-> - docs/README.md 파일을 업데이트하기 위해 docs/README-template.md 파일을 수정한 경우
+> - docs/README.md 파일을 업데이트하기 위해 docs/README-template.md.j2 파일을 수정한 경우
 > - docs/\*.md 경로에 새로운 문서를 생성한 경우
 > - 기존 문서를 삭제한 경우
 > - 파일 이름을 변경하거나, 문서 내부의 최상위 제목(# 제목)을 수정한 경우
@@ -32,17 +33,13 @@
 > ```
 >
 > ```bash
-> python tools/update-readme.py
+> python tools/update-doclist.py
+> python tools/j2render.py docs/README-template.md.j2 vars/doclist.json -o docs/README.md
 > ```
 >
-> 스크립트 위치: `tools/update-readme.py`
+> 스크립트 위치: `tools/update-doclist.py`, `tools/j2render.py`
 >
-> ```
-> 참고사항: 실행 명령어는 현재 작업중인 디렉터리에 따라 유동적으로 변동될 수 있음.
-> 예시) Root가 아닌 docs/에 위치할 시, python tools/update-readme.py 명령어 사용 시 작동
-> ```
->
-> ⚠️ **수작업으로 문서 목록 갱신하지 마세요.**.  
+> ⚠️ **수작업으로 문서 목록 갱신하지 마세요.**
 > ⚠️ **docs/README.md 파일을 직접 수정하지 마세요.**
 
 ---
@@ -51,12 +48,18 @@
 
 > ⚠️ `docs/README.md`를 직접 수정하지 마세요.
 
-`docs/README.md`를 수정하려면 먼저 `docs/README-template.md`를 업데이트한 후, 루트 디렉터리에서 `python tools/update-readme.py`를 실행하여 `docs/README.md`를 자동으로 갱신하세요.
+`docs/README.md`를 수정하려면 먼저 `docs/README-template.md.j2`를 업데이트한 후, 루트 디렉터리에서 아래 명령어를 실행하여 `docs/README.md`를 자동으로 갱신하세요.
 
 ### 수정 방법
 
-1. `docs/README-template.md`를 업데이트합니다.
-2. 루트 디렉터리에서 `python tools/update-readme.py`를 실행합니다.
+1. `docs/README-template.md.j2`를 업데이트합니다.
+2. 루트 디렉터리에서 아래 명령어를 실행합니다.
+
+   ```bash
+   python tools/update-doclist.py
+   python tools/j2render.py docs/README-template.md.j2 vars/doclist.json -o docs/README.md
+   ```
+
 3. 커밋하기 전에 `docs/README.md`가 자동으로 갱신되었는지 확인합니다.
 
 ## 문서 파일 생성 규칙
