@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,41 +10,6 @@ using Spectre.Console;
 using System.Globalization;
 
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("en-US");
-
-var formatErrors = new List<string>();
-var knownValueOptions = new HashSet<string> { "-t", "--token", "--claims", "-f", "--format", "-o", "--output", "--sort-by", "--sort-order", "--keywords" };
-var repoArgs = new List<string>();
-for (int i = 0; i < args.Length; i++)
-{
-    if (knownValueOptions.Contains(args[i]))
-    {
-        i++;
-        continue;
-    }
-    if (args[i].StartsWith("-")) continue;
-    repoArgs.Add(args[i]);
-}
-
-foreach (var repo in repoArgs)
-{
-    var parts = repo.Split('/');
-    if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
-    {
-        formatErrors.Add($"오류: '{repo}'는 'owner/repo' 형식이 아닙니다.");
-    }
-}
-
-if (formatErrors.Count > 0)
-{
-    foreach (var error in formatErrors)
-    {
-        Console.Error.WriteLine(error);
-    }
-    Console.Error.WriteLine();
-    ShowHelp();
-    Environment.Exit(1);
-    return;
-}
 
 CoconaApp.Run((
 [Argument(Description = "대상 저장소 목록 (예: owner/repo1 owner/repo2)")] string[] repos,
@@ -58,9 +22,32 @@ CoconaApp.Run((
 [Option(Description = "이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)")] string? keywords = null,
 [Option(Description = "캐시를 무시하고 전체 데이터를 다시 수집할지 여부")] bool noCache = false
 ) =>
-{
+{   
+    var formatErrors = new List<string>();
+    foreach (var repo in repos)
+    {
+        var parts = repo.Split('/');
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            formatErrors.Add($"오류: '{repo}'는 'owner/repo' 형식이 아닙니다.");
+    }
+
+    if (formatErrors.Count > 0)
+    {
+        foreach (var error in formatErrors)
+            Console.Error.WriteLine(error);
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("도움말을 보려면 --help 옵션을 사용하세요.");
+        throw new CommandExitedException(1);
+    }
+
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-    if (string.IsNullOrEmpty(token)) { Console.Error.WriteLine("오류: GitHub 토큰이 필요합니다."); Environment.Exit(1); return; }
+    if (string.IsNullOrEmpty(token))
+    {
+        Console.Error.WriteLine("오류: GitHub 토큰이 필요합니다.");
+        Console.Error.WriteLine();
+        Console.Error.WriteLine("도움말을 보려면 --help 옵션을 사용하세요.");
+        throw new CommandExitedException(1);
+    }
 
     string[]? parsedKeywords = keywords != null
         ? keywords.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -324,30 +311,3 @@ CoconaApp.Run((
         }
     }
 });
-
-static void ShowHelp()
-{
-    try
-    {
-        string assemblyPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{assemblyPath}\" --help",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        using var proc = Process.Start(psi);
-        if (proc != null)
-        {
-            string helpText = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit();
-            Console.Error.Write(helpText);
-        }
-    }
-    catch
-    {
-        Console.Error.WriteLine("도움말을 표시하려면 --help 옵션을 사용하세요.");
-    }
-}
