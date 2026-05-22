@@ -96,9 +96,9 @@ namespace RepoScore.Services
                 new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"), token);
         }
 
-        // 저장소의 머지된 전체 PR 목록을 GraphQL로 조회.
+        // 저장소의 머지된 전체 PR 목록을 GraphQL로 비동기 조회.
         // since가 지정된 경우 해당 시각 이후 업데이트된 PR만 가져옴.
-        public List<PRRecord> GetPullRequests(DateTimeOffset? since = null)
+        public async System.Threading.Tasks.Task<List<PRRecord>> GetPullRequestsAsync(DateTimeOffset? since = null)
         {
             string searchString = $"repo:{_owner}/{_repo} is:pr is:merged";
             if (since.HasValue)
@@ -130,7 +130,7 @@ namespace RepoScore.Services
                         }).ToList()
                     });
 
-                var result = _graphQLConnection.Run(query).Result;
+                var result = await _graphQLConnection.Run(query);
 
                 foreach (var pr in result.Items)
                 {
@@ -153,11 +153,11 @@ namespace RepoScore.Services
             return prRecords;
         }
 
-        // 저장소의 전체 이슈 목록을 GraphQL로 조회.
+        // 저장소의 전체 이슈 목록을 GraphQL로 비동기 조회.
         // "not planned", "duplicate" 사유로 닫힌 이슈는 제외.
         // since가 지정된 경우 해당 시각 이후 업데이트된 이슈만 가져옴.
         // repository 필드를 search와 함께 요청하여 존재하지 않는 저장소면 예외 발생.
-        public List<IssueRecord> GetIssues(DateTimeOffset? since = null)
+        public async System.Threading.Tasks.Task<List<IssueRecord>> GetIssuesAsync(DateTimeOffset? since = null)
         {
             const string rawGraphQl = @"
             query($owner: String!, $repoName: String!, $searchQuery: String!, $after: String) {
@@ -213,7 +213,7 @@ namespace RepoScore.Services
                     }
                 });
 
-                var rawResponse = _graphQLConnection.Run(requestPayload).Result;
+                var rawResponse = await _graphQLConnection.Run(requestPayload);
                 using var document = JsonDocument.Parse(rawResponse);
 
                 // errors 필드가 있으면 저장소 없음 등의 오류 → 예외로 전달
@@ -282,9 +282,9 @@ namespace RepoScore.Services
             return issueRecords;
         }
 
-        // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 조회.
-        public (ClaimsData claimsData, List<IssueRecord> updatedOpenIssues, List<PRRecord> updatedOpenPrs)
-            GetRecentClaimsData(
+        // 저장소의 열린 이슈를 대상으로 최근 48시간 내 선점 현황을 비동기 조회.
+        public async System.Threading.Tasks.Task<(ClaimsData claimsData, List<IssueRecord> updatedOpenIssues, List<PRRecord> updatedOpenPrs)>
+            GetRecentClaimsDataAsync(
                 List<IssueRecord>? cachedOpenIssues = null,
                 List<PRRecord>? cachedOpenPrs = null,
                 DateTimeOffset? since = null)
@@ -292,7 +292,7 @@ namespace RepoScore.Services
             var now = DateTimeOffset.UtcNow;
             bool isFullRefresh = since == null || (now - since.Value).TotalHours > 48;
 
-            var freshOpenPrs = GetOpenPullRequestsWithLinkedIssues(isFullRefresh ? null : since);
+            var freshOpenPrs = await GetOpenPullRequestsWithLinkedIssuesAsync(isFullRefresh ? null : since);
 
             List<PRRecord> updatedOpenPrs;
             if (isFullRefresh || cachedOpenPrs == null)
@@ -318,7 +318,7 @@ namespace RepoScore.Services
                 }
             }
 
-            var (freshIssues, closedIssueNumbers) = FetchOpenIssuesWithClaimComments(
+            var (freshIssues, closedIssueNumbers) = await FetchOpenIssuesWithClaimCommentsAsync(
                 isFullRefresh ? null : since);
 
             List<IssueRecord> updatedOpenIssues;
@@ -379,9 +379,9 @@ namespace RepoScore.Services
             return (claimsData, updatedOpenIssues, updatedOpenPrs);
         }
 
-        // 열린 이슈와 선점 댓글을 함께 조회.
-        private (List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)
-            FetchOpenIssuesWithClaimComments(DateTimeOffset? since = null)
+        // 열린 이슈와 선점 댓글을 함께 비동기 조회.
+        private async System.Threading.Tasks.Task<(List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)>
+            FetchOpenIssuesWithClaimCommentsAsync(DateTimeOffset? since = null)
         {
             var openIssues = new List<IssueRecord>();
             var closedIssueNumbers = new HashSet<int>();
@@ -418,7 +418,7 @@ namespace RepoScore.Services
                         }
                     });
 
-                    var rawResponse = _graphQLConnection.Run(payload).Result;
+                    var rawResponse = await _graphQLConnection.Run(payload);
                     using var doc = JsonDocument.Parse(rawResponse);
 
                     if (!doc.RootElement.TryGetProperty("data", out var dataEl) ||
@@ -468,7 +468,7 @@ namespace RepoScore.Services
                         }).ToList()
                     });
 
-                var result = _graphQLConnection.Run(query).Result;
+                var result = await _graphQLConnection.Run(query);
 
                 foreach (var issue in result.Items)
                 {
@@ -521,8 +521,8 @@ namespace RepoScore.Services
             return (openIssues, closedIssueNumbers);
         }
 
-        // since 이후 업데이트된 열린 PR과 본문에서 파싱한 연결 이슈 번호 목록을 반환.
-        public List<PRWithLinkedIssues> GetOpenPullRequestsWithLinkedIssues(DateTimeOffset? since = null)
+        // since 이후 업데이트된 열린 PR과 본문에서 파싱한 연결 이슈 번호 목록을 비동기 반환.
+        public async System.Threading.Tasks.Task<List<PRWithLinkedIssues>> GetOpenPullRequestsWithLinkedIssuesAsync(DateTimeOffset? since = null)
         {
             var prsWithIssues = new List<PRWithLinkedIssues>();
             string? cursor = null;
@@ -551,7 +551,7 @@ namespace RepoScore.Services
                         }).ToList()
                     });
 
-                var result = _graphQLConnection.Run(query).Result;
+                var result = await _graphQLConnection.Run(query);
 
                 foreach (var pr in result.Items)
                 {
