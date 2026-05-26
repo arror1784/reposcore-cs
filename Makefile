@@ -31,7 +31,7 @@ docs/README.md: $(DOCLIST_JSON) $(DOCS_TEMPLATE)
 README.md: $(SYNOPSIS_JSON) $(ROOT_TEMPLATE)
 	$(J2RENDER) $(ROOT_TEMPLATE) $(SYNOPSIS_JSON) -o README.md
 
-## docs 빌드 진입점
+## docs 빌드
 docs: docs/README.md README.md
 
 ## README.md synopsis 섹션만 업데이트
