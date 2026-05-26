@@ -25,7 +25,7 @@ namespace RepoScore.Data
                 Score = r.Score.ToString(),
                 Raw = r
             }).ToList();
-            
+
             string userHeader = "유저";
             string issueHeader = "이슈 (문서/기능버그)";
             string prHeader = "PR (문서/기능버그/오타)";
@@ -43,6 +43,9 @@ namespace RepoScore.Data
                 new string('-', scoreWidth);
 
             var sb = new StringBuilder();
+            var rejectionsSb = new StringBuilder();
+            var rejections = new List<(string userId, StringBuilder suggestions)>();
+
             sb.AppendLine($"=== {repo} 오픈소스 기여도 분석 리포트 ===");
             sb.AppendLine($"분석 일시: {DateTime.Now:yyyy-MM-dd HH:mm}");
             sb.AppendLine();
@@ -76,12 +79,14 @@ namespace RepoScore.Data
 
                 if (rejectedPr > 0 || rejectedIssue > 0)
                 {
-                    sb.AppendLine($"   [미인정 항목] 문서/오타 PR {rejectedPr}개 초과(한도 {maxAdditionalPr}개) / 이슈 {rejectedIssue}개 초과(한도 {maxIssueCount}개)");
+                    var userRejections = new StringBuilder();
+                    userRejections.AppendLine($"{row.Id}:");
+                    userRejections.AppendLine($"   [미인정 항목] 문서/오타 PR {rejectedPr}개 초과(한도 {maxAdditionalPr}개) / 이슈 {rejectedIssue}개 초과(한도 {maxIssueCount}개)");
 
                     if (rejectedPr > 0)
                     {
                         int docSuggestionCount = (rejectedPr + 2) / 3;
-                        sb.AppendLine($"   [추가 제안] 기능/버그 PR {docSuggestionCount}개 추가 시 문서PR 인정 한도 +{docSuggestionCount * 3}");
+                        userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {docSuggestionCount}개 추가 시 문서PR 인정 한도 +{docSuggestionCount * 3}");
                     }
 
                     if (rejectedIssue > 0)
@@ -89,14 +94,28 @@ namespace RepoScore.Data
                         int issueSuggestionCount = (rejectedIssue + 3) / 4;
                         if (totalDocTypoPr < maxAdditionalPr)
                         {
-                            sb.AppendLine($"   [추가 제안] 문서 PR {issueSuggestionCount}개 추가 혹은 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
+                            userRejections.AppendLine($"   [추가 제안] 문서 PR {issueSuggestionCount}개 추가 혹은 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
                         }
                         else
                         {
-                            sb.AppendLine($"   [추가 제안] 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
+                            userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
                         }
                     }
 
+                    rejections.Add((row.Id, userRejections));
+                }
+            }
+
+            // 미인정 항목이 있는 경우 최하단에 표시
+            if (rejections.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("=== 미인정 항목 및 추가 제안 ===");
+                sb.AppendLine();
+
+                foreach (var (userId, suggestions) in rejections)
+                {
+                    sb.Append(suggestions.ToString());
                     sb.AppendLine();
                 }
             }
