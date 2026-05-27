@@ -48,11 +48,7 @@ dotnet run -- --help
 Synopsis 섹션은 CLI 도움말을 자동으로 반영합니다. 프로그램 옵션 또는 실행 방식이 변경되면 다음 명령어로 업데이트하세요:
 
 ```bash
-# 개별 업데이트
-python tools/update-synopsis.py
-python tools/j2render.py README-template.md.j2 vars/synopsis.json -o README.md
-
-# 또는 Makefile로
+# synopsis만 업데이트
 make synopsis
 
 # docs와 함께 업데이트
