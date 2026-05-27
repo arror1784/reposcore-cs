@@ -7,12 +7,28 @@ using System.Text.Json;
 
 namespace RepoScore.Data
 {
+    /// <summary>
+    /// 분석 결과 리포트의 출력 형식을 나타내는 열거형입니다.
+    /// </summary>
     public enum OutputFormat { Csv, Txt, Html }
 
+    /// <summary>
+    /// 이슈 선점 현황 조회 시 출력 기준을 나타내는 열거형입니다.
+    /// </summary>
     public enum ClaimsMode { Issue, User }
 
+    /// <summary>
+    /// 분석 결과를 다양한 형식(TXT, HTML, Claims)으로 포맷팅하여 문자열로 반환하는 클래스입니다.
+    /// </summary>
     public static class ReportFormatter
     {
+        /// <summary>
+        /// 기여도 분석 결과를 사람이 읽기 쉬운 텍스트 표 형식으로 빌드합니다.
+        /// 미인정 항목이 존재하는 경우 추가 제안 메시지를 포함합니다.
+        /// </summary>
+        /// <param name="repo">분석 대상 저장소 이름 (예: owner/repo)</param>
+        /// <param name="reportData">유저별 기여 수치 및 점수 데이터 목록</param>
+        /// <returns>포맷팅된 텍스트 리포트 문자열</returns>
         public static string BuildTextReport(
             string repo,
             List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData)
@@ -123,6 +139,12 @@ namespace RepoScore.Data
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 기여도 분석 결과를 Chart.js 기반의 인터랙티브 막대 차트가 포함된 HTML 리포트로 빌드합니다.
+        /// </summary>
+        /// <param name="repoName">분석 대상 저장소 이름 (예: owner/repo)</param>
+        /// <param name="reportData">유저별 기여 수치 및 점수 데이터 목록</param>
+        /// <returns>포맷팅된 HTML 리포트 문자열</returns>
         public static string BuildHtmlReport(string repoName, List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData)
         {
             var labels = JsonSerializer.Serialize(reportData.Select(r => $"{r.Id} (점수: {r.Score})"));
@@ -184,6 +206,12 @@ namespace RepoScore.Data
 ";
         }
 
+        /// <summary>
+        /// 이슈 선점 현황 데이터를 지정된 출력 모드에 따라 텍스트 리포트로 빌드합니다.
+        /// </summary>
+        /// <param name="data">선점된 이슈 맵과 미선점 이슈 URL 목록을 포함하는 선점 현황 데이터</param>
+        /// <param name="mode">출력 기준 모드 (이슈별 또는 유저별)</param>
+        /// <returns>포맷팅된 선점 현황 리포트 문자열</returns>
         public static string BuildClaimsReport(ClaimsData data, ClaimsMode mode)
         {
             var sb = new StringBuilder();
@@ -243,6 +271,11 @@ namespace RepoScore.Data
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 선점된 이슈의 현재 상태(PR 연동 여부 또는 남은 시간)를 나타내는 문자열을 반환합니다.
+        /// </summary>
+        /// <param name="claim">상태를 포맷팅할 대상 이슈 기록</param>
+        /// <returns>PR 연동 정보 또는 선점 만료까지 남은 시간 문자열</returns>
         public static string FormatClaimStatus(IssueRecord claim)
         {
             if (!claim.HasPr)
@@ -259,17 +292,35 @@ namespace RepoScore.Data
             return "   PR 생성됨";
         }
 
+        /// <summary>
+        /// 선점 만료까지 남은 시간을 "HH:MM:SS" 형식의 문자열로 반환합니다.
+        /// 만료 기한이 지난 경우 "기한 초과" 문자열을 반환합니다.
+        /// </summary>
+        /// <param name="remaining">선점 만료까지 남은 시간</param>
+        /// <returns>남은 시간 문자열 또는 기한 초과 메시지</returns>
         public static string FormatRemainingTime(TimeSpan remaining)
         {
             if (remaining <= TimeSpan.Zero) return "   기한 초과";
             return $"   남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
         }
 
+        /// <summary>
+        /// 문자열을 지정된 너비에 맞게 왼쪽 패딩하여 반환합니다.
+        /// </summary>
+        /// <param name="text">패딩할 대상 문자열</param>
+        /// <param name="width">목표 너비 (문자 수 기준)</param>
+        /// <returns>왼쪽 공백이 채워진 문자열</returns>
         public static string PadLeft(string text, int width)
         {
             return text.PadLeft(width);
         }
 
+        /// <summary>
+        /// 한글 등 전각 문자를 고려하여 문자열을 지정된 표시 너비에 맞게 오른쪽 패딩하여 반환합니다.
+        /// </summary>
+        /// <param name="text">패딩할 대상 문자열</param>
+        /// <param name="width">목표 표시 너비 (반각 문자 단위)</param>
+        /// <returns>오른쪽 공백이 채워진 문자열</returns>
         public static string PadRightKorean(string text, int width)
         {
             int textWidth = GetDisplayWidth(text);
@@ -278,6 +329,12 @@ namespace RepoScore.Data
             return text + new string(' ', width - textWidth);
         }
 
+        /// <summary>
+        /// 한글 등 전각 문자를 고려하여 문자열을 지정된 표시 너비에 맞게 왼쪽 패딩하여 반환합니다.
+        /// </summary>
+        /// <param name="text">패딩할 대상 문자열</param>
+        /// <param name="width">목표 표시 너비 (반각 문자 단위)</param>
+        /// <returns>왼쪽 공백이 채워진 문자열</returns>
         public static string PadLeftKorean(string text, int width)
         {
             int textWidth = GetDisplayWidth(text);
@@ -286,6 +343,12 @@ namespace RepoScore.Data
             return new string(' ', width - textWidth) + text;
         }
 
+        /// <summary>
+        /// 문자열의 터미널 표시 너비를 계산합니다.
+        /// ASCII 범위를 초과하는 문자(한글 등 전각 문자)는 너비 2로, 나머지는 너비 1로 계산합니다.
+        /// </summary>
+        /// <param name="text">표시 너비를 측정할 문자열</param>
+        /// <returns>터미널 기준 표시 너비 (반각 문자 단위)</returns>
         public static int GetDisplayWidth(string text)
         {
             int width = 0;
