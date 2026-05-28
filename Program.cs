@@ -27,7 +27,7 @@ await CoconaApp.RunAsync(async (
 [Option(Description = "로그 상세 수준 (0=기본, 1=진행 정보, 2=디버그, 3=상세 디버그)")] int verbose = 0
 ) =>
 {
-     var minimumLevel = verbose switch
+    var minimumLevel = verbose switch
     {
         <= 0 => LogEventLevel.Warning,
         1 => LogEventLevel.Information,
