@@ -124,7 +124,7 @@ var connection = new Connection(
 
 ### 설명
 
-* `ProductHeaderValue` : 어플리케이션 이름
+* `ProductHeaderValue` : 애플리케이션 이름
 * `YOUR_GITHUB_TOKEN` : GitHub Personal Access Token
 
 -> GitHub 토큰 필요

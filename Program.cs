@@ -9,6 +9,8 @@ using RepoScore.Data;
 using RepoScore.Services;
 using Spectre.Console;
 using System.Globalization;
+using Serilog;
+using Serilog.Events;
 
 CultureInfo.DefaultThreadCurrentUICulture = new CultureInfo("en-US");
 
@@ -21,9 +23,24 @@ await CoconaApp.RunAsync(async (
 [Option(Description = "정렬 기준")] SortBy sortBy = SortBy.Score,
 [Option(Description = "정렬 방법")] SortOrder sortOrder = SortOrder.Desc,
 [Option(Description = "이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)", ValueName = "KEYWORDS")] string? keywords = null,
-[Option(Description = "캐시를 무시하고 전체 데이터를 다시 수집할지 여부")] bool noCache = false
+[Option(Description = "캐시를 무시하고 전체 데이터를 다시 수집할지 여부")] bool noCache = false,
+[Option(Description = "로그 상세 수준 (0=기본, 1=진행 정보, 2=디버그, 3=상세 디버그)")] int verbose = 0
 ) =>
 {
+    var minimumLevel = verbose switch
+    {
+        <= 0 => LogEventLevel.Warning,
+        1 => LogEventLevel.Information,
+        2 => LogEventLevel.Debug,
+        _ => LogEventLevel.Verbose,
+    };
+
+    Log.Logger = new LoggerConfiguration()
+        .MinimumLevel.Is(minimumLevel)
+        .WriteTo.Console(
+            standardErrorFromLevel: LogEventLevel.Verbose,
+            outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}")
+        .CreateLogger();
     var formatErrors = new List<string>();
     foreach (var repo in repos)
     {
@@ -90,9 +107,9 @@ await CoconaApp.RunAsync(async (
                         : (DateTimeOffset?)null;
 
                     if (claimsSince.HasValue)
-                        Console.Error.WriteLine($"[{repo}] Claims 캐시 존재: {claimsSince.Value.ToLocalTime():yyyy-MM-dd HH:mm} — 이후 변경분만 재조회합니다.");
+                        Log.Information("[{Repo}] Claims 캐시 존재: {ClaimsSince:yyyy-MM-dd HH:mm} — 이후 변경분만 재조회합니다.", repo, claimsSince.Value.ToLocalTime());
                     else
-                        Console.Error.WriteLine($"[{repo}] Claims 캐시 없음: 전체 데이터를 수집합니다.");
+                        Log.Information("[{Repo}] Claims 캐시 없음: 전체 데이터를 수집합니다.", repo);
 
                     var cachedOpenIssues = cache.CachedOpenIssues.Count > 0 ? cache.CachedOpenIssues : null;
                     var cachedOpenPrs = cache.CachedOpenPrs.Count > 0 ? cache.CachedOpenPrs : null;
@@ -104,7 +121,7 @@ await CoconaApp.RunAsync(async (
                     Console.Write(report);
 
                     CacheManager.SaveClaimsCache(cachePath, cache, updatedOpenIssues, updatedOpenPrs);
-                    Console.Error.WriteLine($"[{repo}] Claims 캐시 갱신 완료: {cachePath}");
+                    Log.Information("[{Repo}] Claims 캐시 갱신 완료: {CachePath}", repo, cachePath);
 
                     return;
                 }
@@ -129,9 +146,9 @@ await CoconaApp.RunAsync(async (
                     : cache.LastAnalyzedAt;
 
                 if (since.HasValue)
-                    Console.Error.WriteLine($"[{repo}] 기존 캐시 존재: {since.Value.ToLocalTime():yyyy-MM-dd HH:mm}");
+                    Log.Information("[{Repo}] 기존 캐시 존재: {AnalyzedAt:yyyy-MM-dd HH:mm}", repo, since.Value.ToLocalTime());
                 else
-                    Console.Error.WriteLine($"[{repo}] 기존 캐시 없음: 전체 데이터를 수집합니다.");
+                    Log.Information("[{Repo}] 기존 캐시 없음: 전체 데이터를 수집합니다.", repo);
 
                 // PR과 이슈를 병렬로 조회
                 var prsTask = service.GetPullRequestsAsync(since);
@@ -139,6 +156,7 @@ await CoconaApp.RunAsync(async (
                 await Task.WhenAll(prsTask, issuesTask);
                 var allNewPrs = prsTask.Result;
                 var allNewIssues = issuesTask.Result;
+                Log.Debug("[{Repo}] PR {PrCount}개, Issue {IssueCount}개 조회", repo, allNewPrs.Count, allNewIssues.Count);
 
                 List<string> contributors = allNewPrs.Select(p => p.AuthorLogin)
                     .Concat(allNewIssues.Select(i => i.AuthorLogin))
@@ -203,7 +221,7 @@ await CoconaApp.RunAsync(async (
                 }
 
                 CacheManager.SaveCache(cachePath, cache, parsedKeywords);
-                Console.Error.WriteLine($"[{repo}] 캐시 갱신 및 저장 완료: {cachePath}");
+                Log.Information("[{Repo}] 캐시 갱신 및 저장 완료: {CachePath}", repo, cachePath);
 
                 reportData = ReportSorter.SortReportData(reportData, sortBy, sortOrder);
 
@@ -213,7 +231,7 @@ await CoconaApp.RunAsync(async (
 
                 string csvPath = Path.Combine(repoOutput, "results.csv");
                 File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
-                Console.Error.WriteLine($"[{repo}] 기본 데이터(CSV) 저장 완료: {csvPath}");
+                Log.Information("[{Repo}] 기본 데이터(CSV) 저장 완료: {CsvPath}", repo, csvPath);
 
                 if (format == OutputFormat.Txt)
                 {
@@ -352,3 +370,6 @@ await CoconaApp.RunAsync(async (
         }
     }
 });
+
+
+

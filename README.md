@@ -40,7 +40,7 @@ dotnet run -- --help
 ## Synopsis
 
 ```text
-Usage: reposcore-cs [--token <TOKEN>] [--claims <ClaimsMode>] [--format <OutputFormat>] [--output <DIR>] [--sort-by <SortBy>] [--sort-order <SortOrder>] [--keywords <KEYWORDS>] [--no-cache] [--help] [--version] repos0 ... reposN
+Usage: reposcore-cs [--token <TOKEN>] [--claims <ClaimsMode>] [--format <OutputFormat>] [--output <DIR>] [--sort-by <SortBy>] [--sort-order <SortOrder>] [--keywords <KEYWORDS>] [--no-cache] [--verbose <Int32>] [--help] [--version] repos0 ... reposN
 
 reposcore-cs
 
@@ -56,6 +56,7 @@ Options:
   --sort-order <SortOrder>       정렬 방법 (Default: Desc) (Allowed values: Asc, Desc)
   --keywords <KEYWORDS>          이슈 선점 키워드 (쉼표 구분, 미입력시 기본값 사용)
   --no-cache                     캐시를 무시하고 전체 데이터를 다시 수집할지 여부
+  --verbose <Int32>              로그 상세 수준 (0=기본, 1=진행 정보, 2=디버그, 3=상세 디버그) (Default: 0)
   -h, --help                     Show help message
   --version                      Show version
 ```

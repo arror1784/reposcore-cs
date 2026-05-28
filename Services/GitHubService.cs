@@ -696,8 +696,6 @@ namespace RepoScore.Services
 
                 foreach (var pr in result.Items)
                 {
-                    if (since.HasValue && pr.UpdatedAt < since.Value)
-                        continue;
 
                     var linkedIssueNumbers = new HashSet<int>();
 

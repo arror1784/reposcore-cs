@@ -20,12 +20,20 @@
     <EmbeddedResource Remove="RepoScore.Tests/**" />
     <None Remove="RepoScore.Tests/**" />
   </ItemGroup>
+  
 
   <ItemGroup>
     <PackageReference Include="Cocona" Version="2.2.0" />
     <PackageReference Include="Octokit" Version="14.0.0" />
     <PackageReference Include="Octokit.GraphQL" Version="0.4.0-beta" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageReference Include="Spectre.Console" Version="0.55.2" />
   </ItemGroup>
+
+  <!-- dotnet test 명령어 실행 시(VSTest 타겟) 테스트 프로젝트를 자동으로 실행하도록 후킹 -->
+  <Target Name="RunTestsAutomatically" BeforeTargets="VSTest">
+    <Exec Command="dotnet test RepoScore.Tests/RepoScore.Tests.csproj --configuration $(Configuration) --logger &quot;console;verbosity=detailed&quot;" />
+  </Target>
 
 </Project>
