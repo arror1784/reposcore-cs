@@ -18,7 +18,7 @@ await CoconaApp.RunAsync(async (
 [Argument(Description = "대상 저장소 목록 (예: owner/repo1 owner/repo2)")] string[] repos,
 [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)", ValueName = "TOKEN")] string? token = null,
 [Option(Description = "최근 이슈 선점 현황 조회")] ClaimsMode? claims = null,
-[Option('f', Description = "출력 형식 (쉼표 구분, 기본값: csv)")] string format = "csv",
+[Option('f', Description = "출력 형식 (쉼표 구분, 예: csv,txt 허용값: csv,txt,html)")] string format = "csv",
 [Option('o', Description = "출력 디렉토리 경로", ValueName = "DIR")] string output = "./results",
 [Option(Description = "정렬 기준")] SortBy sortBy = SortBy.Score,
 [Option(Description = "정렬 방법")] SortOrder sortOrder = SortOrder.Desc,
