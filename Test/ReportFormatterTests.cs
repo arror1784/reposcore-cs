@@ -7,6 +7,28 @@ namespace RepoScore.Test;
 public class ReportFormatterTests
 {
     [Fact]
+    public void BuildTextReport_Should_Contain_Markdown_Table_And_Headers()
+    {
+        // Arrange
+        var reportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>
+        {
+            ("user1", 1, 1, 0, 1, 2, 10),
+            ("user2", 0, 0, 0, 0, 0, 0)
+        };
+
+        // Act
+        string report = ReportFormatter.BuildTextReport("owner/repo", reportData);
+
+        // Assert
+        Assert.Contains("User", report);
+        Assert.Contains("Issues (Docs/Features)", report);
+        Assert.Contains("PR (Docs/Features/Typo)", report);
+        Assert.Contains("Score", report);
+        Assert.Contains("user1", report);
+        Assert.Contains("user2", report);
+    }
+
+    [Fact]
     public void BuildClaimsReport_IncludesLinkedPrNumber_WhenIssueHasLinkedPr()
     {
         var data = new ClaimsData

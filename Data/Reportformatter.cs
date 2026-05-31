@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using RepoScore.Services;
 using System.Text.Json;
+using Spectre.Console;
 
 namespace RepoScore.Data
 {
@@ -42,45 +44,32 @@ namespace RepoScore.Data
                 Raw = r
             }).ToList();
 
-            string userHeader = "유저";
-            string issueHeader = "이슈 (문서/기능버그)";
-            string prHeader = "PR (문서/기능버그/오타)";
-            string scoreHeader = "점수";
+            using var sw = new StringWriter();
+            var anConsole = AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Out = new AnsiConsoleOutput(sw),
+                Ansi = AnsiSupport.No
+            });
+            
+            // 텍스트 출력 시 콘솔 기본 80자 제한으로 인한 강제 줄바꿈 및 레이아웃 깨짐 방지
+            anConsole.Profile.Width = 1024;
 
-            int userWidth = Math.Max(GetDisplayWidth(userHeader), rows.Any() ? rows.Max(x => GetDisplayWidth(x.Id)) : 0);
-            int issueWidth = Math.Max(GetDisplayWidth(issueHeader), rows.Any() ? rows.Max(x => GetDisplayWidth(x.Issues)) : 0);
-            int prWidth = Math.Max(GetDisplayWidth(prHeader), rows.Any() ? rows.Max(x => GetDisplayWidth(x.PullRequests)) : 0);
-            int scoreWidth = Math.Max(GetDisplayWidth(scoreHeader), rows.Any() ? rows.Max(x => GetDisplayWidth(x.Score)) : 0);
-
-            string separator =
-                new string('-', userWidth) + "-+-" +
-                new string('-', issueWidth) + "-+-" +
-                new string('-', prWidth) + "-+-" +
-                new string('-', scoreWidth);
-
-            var sb = new StringBuilder();
-            var rejectionsSb = new StringBuilder();
             var rejections = new List<(string userId, StringBuilder suggestions)>();
 
-            sb.AppendLine($"=== {repo} 오픈소스 기여도 분석 리포트 ===");
-            sb.AppendLine($"분석 일시: {DateTime.Now:yyyy-MM-dd HH:mm}");
-            sb.AppendLine();
+            anConsole.WriteLine($"=== {repo} 오픈소스 기여도 분석 리포트 ===");
+            anConsole.WriteLine($"분석 일시: {DateTime.Now:yyyy-MM-dd HH:mm}");
+            anConsole.WriteLine();
 
-            sb.AppendLine(
-                PadRightKorean(userHeader, userWidth) + " | " +
-                PadLeftKorean(issueHeader, issueWidth) + " | " +
-                PadLeftKorean(prHeader, prWidth) + " | " +
-                PadLeftKorean(scoreHeader, scoreWidth));
-
-            sb.AppendLine(separator);
+            var table = new Table()
+                .Border(TableBorder.Markdown) // 영어를 사용하여 정렬 문제가 해결되었으므로 마크다운 표 테두리(|) 사용
+                .AddColumn(new TableColumn("User").NoWrap()) // 텍스트 길이 초과 시 줄바꿈 방지
+                .AddColumn(new TableColumn("Issues (Docs/Features)").RightAligned().NoWrap())
+                .AddColumn(new TableColumn("PR (Docs/Features/Typo)").RightAligned().NoWrap())
+                .AddColumn(new TableColumn("Score").RightAligned().NoWrap());
 
             foreach (var row in rows)
             {
-                sb.AppendLine(
-                    PadRightKorean(row.Id, userWidth) + " | " +
-                    PadLeftKorean(row.Issues, issueWidth) + " | " +
-                    PadLeftKorean(row.PullRequests, prWidth) + " | " +
-                    PadLeftKorean(row.Score, scoreWidth));
+                table.AddRow(row.Id, row.Issues, row.PullRequests, row.Score);
 
                 var r = row.Raw;
 
@@ -122,21 +111,23 @@ namespace RepoScore.Data
                 }
             }
 
+            anConsole.Write(table);
+
             // 미인정 항목이 있는 경우 최하단에 표시
             if (rejections.Count > 0)
             {
-                sb.AppendLine();
-                sb.AppendLine("=== 미인정 항목 및 추가 제안 ===");
-                sb.AppendLine();
+                anConsole.WriteLine();
+                anConsole.WriteLine("=== 미인정 항목 및 추가 제안 ===");
+                anConsole.WriteLine();
 
                 foreach (var (userId, suggestions) in rejections)
                 {
-                    sb.Append(suggestions.ToString());
-                    sb.AppendLine();
+                    anConsole.Write(suggestions.ToString());
+                    anConsole.WriteLine();
                 }
             }
 
-            return sb.ToString();
+            return sw.ToString();
         }
 
         /// <summary>
@@ -302,63 +293,6 @@ namespace RepoScore.Data
         {
             if (remaining <= TimeSpan.Zero) return "   기한 초과";
             return $"   남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
-        }
-
-        /// <summary>
-        /// 문자열을 지정된 너비에 맞게 왼쪽 패딩하여 반환합니다.
-        /// </summary>
-        /// <param name="text">패딩할 대상 문자열</param>
-        /// <param name="width">목표 너비 (문자 수 기준)</param>
-        /// <returns>왼쪽 공백이 채워진 문자열</returns>
-        public static string PadLeft(string text, int width)
-        {
-            return text.PadLeft(width);
-        }
-
-        /// <summary>
-        /// 한글 등 전각 문자를 고려하여 문자열을 지정된 표시 너비에 맞게 오른쪽 패딩하여 반환합니다.
-        /// </summary>
-        /// <param name="text">패딩할 대상 문자열</param>
-        /// <param name="width">목표 표시 너비 (반각 문자 단위)</param>
-        /// <returns>오른쪽 공백이 채워진 문자열</returns>
-        public static string PadRightKorean(string text, int width)
-        {
-            int textWidth = GetDisplayWidth(text);
-            if (textWidth >= width) return text;
-
-            return text + new string(' ', width - textWidth);
-        }
-
-        /// <summary>
-        /// 한글 등 전각 문자를 고려하여 문자열을 지정된 표시 너비에 맞게 왼쪽 패딩하여 반환합니다.
-        /// </summary>
-        /// <param name="text">패딩할 대상 문자열</param>
-        /// <param name="width">목표 표시 너비 (반각 문자 단위)</param>
-        /// <returns>왼쪽 공백이 채워진 문자열</returns>
-        public static string PadLeftKorean(string text, int width)
-        {
-            int textWidth = GetDisplayWidth(text);
-            if (textWidth >= width) return text;
-
-            return new string(' ', width - textWidth) + text;
-        }
-
-        /// <summary>
-        /// 문자열의 터미널 표시 너비를 계산합니다.
-        /// ASCII 범위를 초과하는 문자(한글 등 전각 문자)는 너비 2로, 나머지는 너비 1로 계산합니다.
-        /// </summary>
-        /// <param name="text">표시 너비를 측정할 문자열</param>
-        /// <returns>터미널 기준 표시 너비 (반각 문자 단위)</returns>
-        public static int GetDisplayWidth(string text)
-        {
-            int width = 0;
-
-            foreach (char c in text)
-            {
-                width += c > 127 ? 2 : 1;
-            }
-
-            return width;
         }
     }
 }
