@@ -13,7 +13,7 @@ await CoconaApp.RunAsync(async (
 [Argument(Description = "대상 저장소 목록 (예: owner/repo1 owner/repo2)")] string[] repos,
 [Option('t', Description = "GitHub Token (미입력시 GITHUB_TOKEN 사용)", ValueName = "TOKEN")] string? token = null,
 [Option(Description = "최근 이슈 선점 현황 조회")] ClaimsMode? claims = null,
-[Option('f', Description = "출력 형식")] OutputFormat format = OutputFormat.Csv,
+[Option('f', Description = "출력 형식 (쉼표 구분, 예: csv,txt 허용값: csv,txt,html)")] string format = "csv",
 [Option('o', Description = "출력 디렉토리 경로", ValueName = "DIR")] string output = "./results",
 [Option(Description = "정렬 기준")] SortBy sortBy = SortBy.Score,
 [Option(Description = "정렬 방법")] SortOrder sortOrder = SortOrder.Desc,
@@ -22,7 +22,7 @@ await CoconaApp.RunAsync(async (
 [Option(Description = "로그 상세 수준 (-1=경고/에러만, 0=기본/진행 정보, 1=디버그, 2=상세 디버그)")] int verbose = 0
 ) =>
 {
-    var minimumLevel = verbose switch
+    var minimumLevel = verbose switch // 로거 설정을 먼저 수행
     {
         < 0 => LogEventLevel.Warning,
         0 => LogEventLevel.Information,
@@ -36,6 +36,38 @@ await CoconaApp.RunAsync(async (
             standardErrorFromLevel: LogEventLevel.Verbose,
             outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}")
         .CreateLogger();
+
+    // --format 옵션 파싱 및 유효성 검사
+    var activeFormats = new HashSet<OutputFormat>();
+    var invalidFormats = new List<string>();
+    var allowedFormats = Enum.GetNames<OutputFormat>().Select(e => e.ToLowerInvariant());
+
+    foreach (var f in format.Split(',', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var trimmedFormat = f.Trim();
+        if (string.IsNullOrEmpty(trimmedFormat)) continue;
+
+        if (Enum.TryParse<OutputFormat>(trimmedFormat, true, out var parsedFormat))
+        {
+            activeFormats.Add(parsedFormat);
+        }
+        else
+        {
+            invalidFormats.Add(trimmedFormat);
+        }
+    }
+
+    if (invalidFormats.Any())
+    {
+        foreach (var invalid in invalidFormats)
+            Log.Error("오류: '{Format}'은(는) 유효하지 않은 출력 형식입니다. 허용값: {Allowed}", invalid, string.Join(", ", allowedFormats));
+        Log.Error("도움말을 보려면 --help 옵션을 사용하세요.");
+        throw new CommandExitedException(1);
+    }
+
+    // 유효한 형식이 하나도 없으면 기본값(Csv) 사용
+    if (activeFormats.Count == 0) activeFormats.Add(OutputFormat.Csv);
+
     var formatErrors = new List<string>();
     foreach (var repo in repos)
     {
@@ -221,15 +253,18 @@ await CoconaApp.RunAsync(async (
 
                 reportData = ReportSorter.SortReportData(reportData, sortBy, sortOrder);
 
-                var csv = new StringBuilder();
-                csv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-                foreach (var r in reportData) csv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
+                if (activeFormats.Contains(OutputFormat.Csv))
+                {
+                    var csv = new StringBuilder();
+                    csv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
+                    foreach (var r in reportData) csv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
 
-                string csvPath = Path.Combine(repoOutput, "results.csv");
-                File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
-                Log.Information("[{Repo}] 기본 데이터(CSV) 저장 완료: {CsvPath}", repo, csvPath);
+                    string csvPath = Path.Combine(repoOutput, "results.csv");
+                    File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
+                    Log.Information("[{Repo}] 기본 데이터(CSV) 저장 완료: {CsvPath}", repo, csvPath);
+                }
 
-                if (format == OutputFormat.Txt)
+                if (activeFormats.Contains(OutputFormat.Txt))
                 {
                     string txtPath = Path.Combine(repoOutput, "results.txt");
                     string txtContent = ReportFormatter.BuildTextReport(repo, reportData);
@@ -237,7 +272,7 @@ await CoconaApp.RunAsync(async (
                     Log.Information("[{Repo}] 가독성 리포트(TXT) 추가 저장 완료: {TxtPath}", repo, txtPath);
                 }
 
-                if (format == OutputFormat.Html)
+                if (activeFormats.Contains(OutputFormat.Html))
                 {
                     string htmlPath = Path.Combine(repoOutput, "results.html");
                     string htmlContent = ReportFormatter.BuildHtmlReport(repo, reportData);
@@ -340,15 +375,18 @@ await CoconaApp.RunAsync(async (
             string totalOutput = output;
             if (!Directory.Exists(totalOutput)) Directory.CreateDirectory(totalOutput);
 
-            var totalCsv = new StringBuilder();
-            totalCsv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-            foreach (var r in totalReportData) totalCsv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
+            if (activeFormats.Contains(OutputFormat.Csv))
+            {
+                var totalCsv = new StringBuilder();
+                totalCsv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
+                foreach (var r in totalReportData) totalCsv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
 
-            string totalCsvPath = Path.Combine(totalOutput, "results.csv");
-            File.WriteAllText(totalCsvPath, totalCsv.ToString(), Encoding.UTF8);
-            Log.Information("전체 합산 데이터(CSV) 저장 완료: {TotalCsvPath}", totalCsvPath);
+                string totalCsvPath = Path.Combine(totalOutput, "results.csv");
+                File.WriteAllText(totalCsvPath, totalCsv.ToString(), Encoding.UTF8);
+                Log.Information("전체 합산 데이터(CSV) 저장 완료: {TotalCsvPath}", totalCsvPath);
+            }
 
-            if (format == OutputFormat.Txt)
+            if (activeFormats.Contains(OutputFormat.Txt))
             {
                 string totalLabel = string.Join(" + ", repos);
                 string totalTxtPath = Path.Combine(totalOutput, "results.txt");
@@ -357,7 +395,7 @@ await CoconaApp.RunAsync(async (
                 Log.Information("전체 합산 리포트(TXT) 저장 완료: {TotalTxtPath}", totalTxtPath);
             }
 
-            if (format == OutputFormat.Html)
+            if (activeFormats.Contains(OutputFormat.Html))
             {
                 string totalLabel = string.Join(" + ", repos);
                 string totalHtmlPath = Path.Combine(totalOutput, "results.html");
