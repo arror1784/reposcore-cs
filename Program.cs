@@ -72,6 +72,9 @@ await CoconaApp.RunAsync(async (
     // 저장소별 (issues, prs) 결과를 담을 딕셔너리 — 병렬 처리 후 합산에 사용
     var repoResults = new System.Collections.Concurrent.ConcurrentDictionary<string, (Dictionary<string, List<IssueRecord>> UserIssues, Dictionary<string, List<PRRecord>> UserPrs)>();
 
+    // 저장소 처리 중 발생한 예외를 저장 — Task.WhenAll 후 종료 코드 결정에 사용
+    var repoFailures = new System.Collections.Concurrent.ConcurrentBag<string>();
+
     // 다중 저장소를 병렬로 처리 (동시 실행 상한: 8)
     using var semaphore = new System.Threading.SemaphoreSlim(8);
 
@@ -261,7 +264,10 @@ await CoconaApp.RunAsync(async (
                     Environment.Exit(1);
                     return;
                 }
-                Log.Error(ex, "처리 중 예외가 발생했습니다.");
+
+                // 저장소 처리 실패를 기록하고 다른 저장소 처리는 계속 진행
+                Log.Error(ex, "[{Repo}] 처리 중 예외가 발생했습니다.", repo);
+                repoFailures.Add(repo);
             }
         }
         finally
@@ -271,6 +277,9 @@ await CoconaApp.RunAsync(async (
     }).ToList();
 
     await Task.WhenAll(repoTasks);
+
+    // 하나 이상의 저장소 처리가 실패한 경우 합산 리포트는 진행하되 마지막에 비 0 종료
+    bool hasRepoFailure = !repoFailures.IsEmpty;
 
     if (repos.Length > 1 && repoResults.Count > 0)
     {
@@ -364,7 +373,17 @@ await CoconaApp.RunAsync(async (
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "처리 중 예외가 발생했습니다.");
+            // 합산 단계 실패도 비 0 종료로 처리
+            Log.Error(ex, "합산 리포트 생성 중 예외가 발생했습니다.");
+            throw new CommandExitedException(1);
         }
+    }
+
+    // 개별 저장소 처리 실패가 있었던 경우 비 0 종료
+    if (hasRepoFailure)
+    {
+        var failedRepos = string.Join(", ", repoFailures);
+        Log.Error("다음 저장소 처리 중 오류가 발생했습니다: {FailedRepos}", failedRepos);
+        throw new CommandExitedException(1);
     }
 });
