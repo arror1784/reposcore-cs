@@ -36,7 +36,7 @@ await CoconaApp.RunAsync(async (
             standardErrorFromLevel: LogEventLevel.Verbose,
             outputTemplate: "[{Level:u3}] {Message:lj}{NewLine}{Exception}")
         .CreateLogger();
-    
+
     // --format 옵션 파싱 및 유효성 검사
     var activeFormats = new HashSet<OutputFormat>();
     var invalidFormats = new List<string>();
