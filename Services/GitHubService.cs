@@ -517,138 +517,189 @@ namespace RepoScore.Services
         private async System.Threading.Tasks.Task<(List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)>
             FetchOpenIssuesWithClaimCommentsAsync(DateTimeOffset? since = null)
         {
+            const string rawGraphQl = @"
+            query($searchQuery: String!, $after: String) {
+                search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
+                    pageInfo {
+                        hasNextPage
+                        endCursor
+                    }
+                    nodes {
+                        ... on Issue {
+                            number
+                            url
+                            state
+                            updatedAt
+                            labels(first: 10) {
+                                nodes {
+                                    name
+                                }
+                            }
+                            comments(first: 10) {
+                                nodes {
+                                    body
+                                    createdAt
+                                    author {
+                                        login
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }";
+
             var openIssues = new List<IssueRecord>();
             var closedIssueNumbers = new HashSet<int>();
             string? cursor = null;
             bool hasNextPage = true;
             var now = DateTimeOffset.UtcNow;
 
-            var updatedIssueNumbers = new HashSet<int>();
+            string searchString = $"repo:{_owner}/{_repo} is:issue";
             if (since.HasValue)
             {
-                const string allIssuesQuery = @"
-                query($searchQuery: String!, $after: String) {
-                    search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
-                        pageInfo { hasNextPage endCursor }
-                        nodes {
-                            ... on Issue { number }
-                        }
-                    }
-                }";
-
-                string searchString = $"repo:{_owner}/{_repo} is:issue updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
-                string? searchCursor = null;
-                bool searchHasNextPage = true;
-
-                while (searchHasNextPage)
-                {
-                    var payload = JsonSerializer.Serialize(new
-                    {
-                        query = allIssuesQuery,
-                        variables = new Dictionary<string, object>
-                        {
-                            ["searchQuery"] = searchString,
-                            ["after"] = searchCursor!
-                        }
-                    });
-
-                    var rawResponse = await _graphQLConnection.Run(payload);
-                    using var doc = JsonDocument.Parse(rawResponse);
-
-                    if (!doc.RootElement.TryGetProperty("data", out var dataEl) ||
-                        !dataEl.TryGetProperty("search", out var searchEl))
-                        break;
-
-                    var pageInfo = searchEl.GetProperty("pageInfo");
-                    searchHasNextPage = pageInfo.GetProperty("hasNextPage").GetBoolean();
-                    searchCursor = pageInfo.GetProperty("endCursor").GetString();
-
-                    if (searchEl.TryGetProperty("nodes", out var nodes) && nodes.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var node in nodes.EnumerateArray())
-                        {
-                            if (node.TryGetProperty("number", out var numEl))
-                                updatedIssueNumbers.Add(numEl.GetInt32());
-                        }
-                    }
-                }
+                searchString += $" updated:>={since.Value.ToUniversalTime():yyyy-MM-ddTHH:mm:ssZ}";
             }
 
             while (hasNextPage)
             {
-                var query = new Octokit.GraphQL.Query()
-                    .Repository(_repo, _owner)
-                    .Issues(
-                        first: 100,
-                        after: cursor,
-                        states: new[] { IssueState.Open },
-                        orderBy: new IssueOrder { Field = IssueOrderField.UpdatedAt, Direction = OrderDirection.Desc })
-                    .Select(s => new
-                    {
-                        s.PageInfo.HasNextPage,
-                        s.PageInfo.EndCursor,
-                        Items = s.Nodes.Select(issue => new
-                        {
-                            issue.Number,
-                            issue.Url,
-                            issue.UpdatedAt,
-                            Labels = issue.Labels(10, null, null, null, null).Nodes.Select(l => l.Name).ToList(),
-                            Comments = issue.Comments(10, null, null, null, null).Nodes.Select(c => new
-                            {
-                                c.Body,
-                                c.CreatedAt,
-                                AuthorLogin = c.Author.Login
-                            }).ToList()
-                        }).ToList()
-                    });
-
-                var result = await _graphQLConnection.Run(query);
-
-                foreach (var issue in result.Items)
+                var requestPayload = JsonSerializer.Serialize(new
                 {
-                    if (since.HasValue && issue.UpdatedAt < since.Value)
+                    query = rawGraphQl,
+                    variables = new Dictionary<string, object?>
                     {
-                        hasNextPage = false;
-                        break;
+                        ["searchQuery"] = searchString,
+                        ["after"] = cursor
+                    }
+                });
+
+                var rawResponse = await _graphQLConnection.Run(requestPayload);
+                using var document = JsonDocument.Parse(rawResponse);
+
+                if (document.RootElement.TryGetProperty("errors", out var errorsElement))
+                {
+                    var firstError = errorsElement.EnumerateArray().FirstOrDefault();
+                    var message = firstError.TryGetProperty("message", out var msgEl)
+                        ? msgEl.GetString() ?? "알 수 없는 오류"
+                        : "알 수 없는 오류";
+                    throw new InvalidOperationException(message);
+                }
+
+                if (!document.RootElement.TryGetProperty("data", out var dataElement) ||
+                    !dataElement.TryGetProperty("search", out var searchElement))
+                {
+                    break;
+                }
+
+                var pageInfo = searchElement.GetProperty("pageInfo");
+                hasNextPage = pageInfo.GetProperty("hasNextPage").GetBoolean();
+                cursor = pageInfo.GetProperty("endCursor").GetString();
+
+                if (!searchElement.TryGetProperty("nodes", out var nodesElement) ||
+                    nodesElement.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var node in nodesElement.EnumerateArray())
+                {
+                    if (node.ValueKind != JsonValueKind.Object) continue;
+
+                    int issueNumber = node.TryGetProperty("number", out var numberElement)
+                        ? numberElement.GetInt32()
+                        : 0;
+
+                    string issueState = node.TryGetProperty("state", out var stateElement)
+                        ? stateElement.GetString() ?? ""
+                        : "";
+
+                    if (string.Equals(issueState, "CLOSED", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (since.HasValue && issueNumber > 0)
+                        {
+                            closedIssueNumbers.Add(issueNumber);
+                        }
+
+                        continue;
                     }
 
-                    var issueLabels = issue.Labels
+                    if (!string.Equals(issueState, "OPEN", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var labelNames = new List<string>();
+                    if (node.TryGetProperty("labels", out var labelsElement) &&
+                        labelsElement.TryGetProperty("nodes", out var labelNodesElement) &&
+                        labelNodesElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var labelNode in labelNodesElement.EnumerateArray())
+                        {
+                            if (labelNode.TryGetProperty("name", out var labelNameElement))
+                            {
+                                labelNames.Add(labelNameElement.GetString() ?? "");
+                            }
+                        }
+                    }
+
+                    var issueLabels = labelNames
                         .Select(ParseGitHubLabel)
                         .Where(l => l != GitHubIssuePrLabel.None)
                         .ToList();
 
-                    var claimComments = issue.Comments
-                        .Where(c => (now - c.CreatedAt).TotalHours <= 48
-                            && _claimKeywords.Any(k => c.Body.Contains(k, StringComparison.OrdinalIgnoreCase)))
-                        .Select(c => new ClaimComment
+                    var claimComments = new List<ClaimComment>();
+                    if (node.TryGetProperty("comments", out var commentsElement) &&
+                        commentsElement.TryGetProperty("nodes", out var commentNodesElement) &&
+                        commentNodesElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var commentNode in commentNodesElement.EnumerateArray())
                         {
-                            AuthorLogin = c.AuthorLogin ?? "unknown",
-                            CreatedAt = c.CreatedAt
-                        })
-                        .ToList();
+                            string body = commentNode.TryGetProperty("body", out var bodyElement)
+                                ? bodyElement.GetString() ?? ""
+                                : "";
+
+                            var createdAt = commentNode.TryGetProperty("createdAt", out var createdAtElement)
+                                ? DateTimeOffset.Parse(createdAtElement.GetString()!)
+                                : DateTimeOffset.MinValue;
+
+                            if ((now - createdAt).TotalHours > 48)
+                            {
+                                continue;
+                            }
+
+                            if (!_claimKeywords.Any(k => body.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                continue;
+                            }
+
+                            string authorLogin = "unknown";
+                            if (commentNode.TryGetProperty("author", out var authorElement) &&
+                                authorElement.ValueKind == JsonValueKind.Object &&
+                                authorElement.TryGetProperty("login", out var loginElement))
+                            {
+                                authorLogin = loginElement.GetString() ?? "unknown";
+                            }
+
+                            claimComments.Add(new ClaimComment
+                            {
+                                AuthorLogin = authorLogin,
+                                CreatedAt = createdAt
+                            });
+                        }
+                    }
+
+                    var updatedAt = node.TryGetProperty("updatedAt", out var updatedAtElement)
+                        ? DateTimeOffset.Parse(updatedAtElement.GetString()!)
+                        : DateTimeOffset.MinValue;
 
                     openIssues.Add(new IssueRecord
                     {
-                        Number = issue.Number,
-                        Url = issue.Url,
+                        Number = issueNumber,
+                        Url = node.TryGetProperty("url", out var urlElement) ? urlElement.GetString() ?? "" : "",
                         Labels = issueLabels,
-                        UpdatedAt = issue.UpdatedAt,
+                        UpdatedAt = updatedAt,
                         CachedClaimComments = claimComments
                     });
-                }
-
-                if (!hasNextPage) break;
-                hasNextPage = result.HasNextPage;
-                cursor = result.EndCursor;
-            }
-
-            if (since.HasValue)
-            {
-                var openNumbers = openIssues.Select(i => i.Number).ToHashSet();
-                foreach (var num in updatedIssueNumbers)
-                {
-                    if (!openNumbers.Contains(num))
-                        closedIssueNumbers.Add(num);
                 }
             }
 
