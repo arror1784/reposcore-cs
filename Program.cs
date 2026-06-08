@@ -67,26 +67,32 @@ await CoconaApp.RunAsync(async (
 
     if (activeFormats.Count == 0) activeFormats.Add(OutputFormat.Csv);
 
-    var formatErrors = new List<string>();
-    foreach (var repo in repos)
-    {
-        var parts = repo.Split('/');
-        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
-            formatErrors.Add($"오류: '{repo}'는 'owner/repo' 형식이 아닙니다.");
-    }
-
-    if (formatErrors.Count > 0)
-    {
-        foreach (var error in formatErrors)
-            Log.Error("{Error}", error);
-        Log.Error("도움말을 보려면 --help 옵션을 사용하세요.");
-        throw new CommandExitedException(1);
-    }
-
+    // 토큰 확인 단계를 위로 이동 (저장소 존재 여부 네트워크 검증에 필수적이기 때문)
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     if (string.IsNullOrEmpty(token))
     {
         Log.Error("오류: GitHub 토큰이 필요합니다.");
+        Log.Error("도움말을 보려면 --help 옵션을 사용하세요.");
+        throw new CommandExitedException(1);
+    }
+
+    // [리팩토링 포인트] 1단계&2단계: 저장소 유효성(형식 + 실제 존재 여부) 일괄 사전 검증
+    var (malformed, notFound) = await GitHubService.ValidateRepositoriesAsync(repos, token);
+
+    if (malformed.Count > 0)
+    {
+        foreach (var r in malformed)
+            Log.Error("오류: '{Repo}'는 'owner/repo' 형식이 아닙니다.", r);
+    }
+
+    if (notFound.Count > 0)
+    {
+        foreach (var r in notFound)
+            Log.Error("오류: '{Repo}' 저장소가 존재하지 않거나 접근할 수 없습니다. 이름 오타가 아닌지 확인해 주세요.", r);
+    }
+
+    if (malformed.Count > 0 || notFound.Count > 0)
+    {
         Log.Error("도움말을 보려면 --help 옵션을 사용하세요.");
         throw new CommandExitedException(1);
     }
@@ -244,7 +250,7 @@ await CoconaApp.RunAsync(async (
 
                 reportData = ReportSorter.SortReportData(reportData, sortBy, sortOrder);
 
-                // ── 1. 리팩토링 포인트: 개별 저장소 리포트 출력 ──
+                // ── 개별 저장소 리포트 출력 ──
                 ExportReports(repo, reportData, activeFormats, repoOutput);
 
                 if (repos.Length > 1)
@@ -254,14 +260,7 @@ await CoconaApp.RunAsync(async (
             }
             catch (Exception ex)
             {
-                if (ex.Message.Contains("Could not resolve to a Repository") ||
-                    (ex.InnerException?.Message.Contains("Could not resolve to a Repository") == true))
-                {
-                    Log.Error("오류: '{Repo}' 저장소가 존재하지 않거나 접근할 수 없습니다.", repo);
-                    Environment.Exit(1);
-                    return;
-                }
-
+                // [리팩토링 포인트] 수집 단단으로 존재 검증을 옮겼으므로, 강제 중단(Environment.Exit) 분기를 지우고 일관되게 repoFailures 처리
                 Log.Error(ex, "[{Repo}] 처리 중 예외가 발생했습니다.", repo);
                 repoFailures.Add(repo);
             }

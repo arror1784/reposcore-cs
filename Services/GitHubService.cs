@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -216,6 +217,80 @@ namespace RepoScore.Services
         }
 
         /// <summary>
+        /// [리팩토링 포인트] 데이터 수집 전 저장소의 형식 및 실제 존재 여부를 GraphQL Alias를 사용해 1회 요청으로 일괄 확인합니다.
+        /// </summary>
+        public static async System.Threading.Tasks.Task<(List<string> Malformed, List<string> NotFound)> ValidateRepositoriesAsync(string[] repos, string token)
+        {
+            var malformed = new List<string>();
+            var notFound = new List<string>();
+            var validRepos = new List<(string Owner, string RepoName, string Original)>();
+
+            // 1단계: 로컬 형식 검증
+            foreach (var repo in repos)
+            {
+                if (string.IsNullOrWhiteSpace(repo))
+                {
+                    malformed.Add(repo);
+                    continue;
+                }
+
+                var parts = repo.Split('/');
+                if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+                {
+                    malformed.Add(repo);
+                }
+                else
+                {
+                    validRepos.Add((parts[0], parts[1], repo));
+                }
+            }
+
+            // 2단계: 네트워크 존재 검증 (GraphQL Alias 단일 쿼리 구성)
+            if (validRepos.Count > 0)
+            {
+                var queryBuilder = new StringBuilder();
+                queryBuilder.AppendLine("query {");
+                for (int i = 0; i < validRepos.Count; i++)
+                {
+                    queryBuilder.AppendLine($"  r{i}: repository(owner: \"{validRepos[i].Owner}\", name: \"{validRepos[i].RepoName}\") {{ id }}");
+                }
+                queryBuilder.AppendLine("}");
+
+                var connection = new Octokit.GraphQL.Connection(new Octokit.GraphQL.ProductHeaderValue("reposcore-cs"), token);
+                var requestPayload = JsonSerializer.Serialize(new { query = queryBuilder.ToString() });
+
+                try
+                {
+                    var rawResponse = await connection.Run(requestPayload);
+                    using var document = JsonDocument.Parse(rawResponse);
+
+                    if (document.RootElement.TryGetProperty("data", out var dataElement))
+                    {
+                        for (int i = 0; i < validRepos.Count; i++)
+                        {
+                            string alias = $"r{i}";
+                            // 부분 실패 시 해당 alias 필드는 응답 json 내에서 null로 떨어집니다.
+                            if (!dataElement.TryGetProperty(alias, out var repoElement) || repoElement.ValueKind == JsonValueKind.Null)
+                            {
+                                notFound.Add(validRepos[i].Original);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var vr in validRepos) notFound.Add(vr.Original);
+                    }
+                }
+                catch (Exception)
+                {
+                    foreach (var vr in validRepos) notFound.Add(vr.Original);
+                }
+            }
+
+            return (malformed, notFound);
+        }
+
+        /// <summary>
         /// 저장소 내에서 메인 브랜치에 병합(Merged)이 완료된 전체 Pull Request 목록을 GraphQL로 비동기 조회합니다.
         /// </summary>
         /// <param name="since">지정된 경우, 해당 일시 이후에 최종 업데이트된 Pull Request 데이터만 필터링하여 수집합니다.</param>
@@ -284,11 +359,9 @@ namespace RepoScore.Services
         /// <exception cref="InvalidOperationException">저장소가 존재하지 않거나 GitHub API 측에서 오류 응답을 반환할 때 발생합니다.</exception>
         public async System.Threading.Tasks.Task<List<IssueRecord>> GetIssuesAsync(DateTimeOffset? since = null)
         {
+            // [리팩토링 포인트] 불필요한 중복 존재 검증 블록인 repository(owner, name) { id } 제거 및 검색 쿼리 단일화
             const string rawGraphQl = @"
-            query($owner: String!, $repoName: String!, $searchQuery: String!, $after: String) {
-                repository(owner: $owner, name: $repoName) {
-                    id
-                }
+            query($searchQuery: String!, $after: String) {
                 search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
                     pageInfo {
                         hasNextPage
@@ -331,8 +404,6 @@ namespace RepoScore.Services
                     query = rawGraphQl,
                     variables = new Dictionary<string, object?>
                     {
-                        ["owner"] = _owner,
-                        ["repoName"] = _repo,
                         ["searchQuery"] = searchString,
                         ["after"] = cursor
                     }
