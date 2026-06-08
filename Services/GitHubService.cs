@@ -217,7 +217,16 @@ namespace RepoScore.Services
         }
 
         /// <summary>
-        /// [리팩토링 포인트] 데이터 수집 전 저장소의 형식 및 실제 존재 여부를 GraphQL Alias를 사용해 1회 요청으로 일괄 확인합니다.
+        /// 문자열 내부의 모든 공백 문자(스페이스, 탭, 개행 등)를 완전히 제거하여 정규화합니다.
+        /// </summary>
+        private static string NormalizeWhitespace(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            return Regex.Replace(s, @"\s+", "");
+        }
+
+        /// <summary>
+        /// 데이터 수집 전 저장소의 형식 및 실제 존재 여부를 GraphQL Alias를 사용해 1회 요청으로 일괄 확인합니다.
         /// </summary>
         public static async System.Threading.Tasks.Task<(List<string> Malformed, List<string> NotFound)> ValidateRepositoriesAsync(string[] repos, string token)
         {
@@ -269,7 +278,6 @@ namespace RepoScore.Services
                         for (int i = 0; i < validRepos.Count; i++)
                         {
                             string alias = $"r{i}";
-                            // 부분 실패 시 해당 alias 필드는 응답 json 내에서 null로 떨어집니다.
                             if (!dataElement.TryGetProperty(alias, out var repoElement) || repoElement.ValueKind == JsonValueKind.Null)
                             {
                                 notFound.Add(validRepos[i].Original);
@@ -359,7 +367,6 @@ namespace RepoScore.Services
         /// <exception cref="InvalidOperationException">저장소가 존재하지 않거나 GitHub API 측에서 오류 응답을 반환할 때 발생합니다.</exception>
         public async System.Threading.Tasks.Task<List<IssueRecord>> GetIssuesAsync(DateTimeOffset? since = null)
         {
-            // [리팩토링 포인트] 불필요한 중복 존재 검증 블록인 repository(owner, name) { id } 제거 및 검색 쿼리 단일화
             const string rawGraphQl = @"
             query($searchQuery: String!, $after: String) {
                 search(query: $searchQuery, type: ISSUE, first: 100, after: $after) {
@@ -738,7 +745,8 @@ namespace RepoScore.Services
                                 continue;
                             }
 
-                            if (!_claimKeywords.Any(k => body.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                            var normalizedBody = NormalizeWhitespace(body);
+                            if (!_claimKeywords.Any(k => normalizedBody.Contains(NormalizeWhitespace(k), StringComparison.OrdinalIgnoreCase)))
                             {
                                 continue;
                             }
