@@ -80,7 +80,8 @@ public class ReportFormatterTests
         string report = ReportFormatter.BuildTextReport("repo", reportData);
 
         Assert.Contains("   [추가 제안] 기능/버그 PR 1개 추가 시 문서PR 인정 한도 +3", report);
-        Assert.DoesNotContain("이슈 인정 한도 +4", report);
+
+        Assert.DoesNotContain("이슈 인정한도", report);
     }
 
     [Fact]
