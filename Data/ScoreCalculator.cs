@@ -61,6 +61,12 @@ namespace RepoScore.Data
         /// <summary>
         /// 학생의 기여 내역을 바탕으로 최종 점수를 계산합니다.
         /// </summary>
+        /// <param name="featureBugPrCount">기능/버그 PR 개수 (Merged)</param>
+        /// <param name="docPrCount">문서 PR 개수 (Merged)</param>
+        /// <param name="typoPrCount">오타 PR 개수 (Merged)</param>
+        /// <param name="featureBugIssueCount">기능/버그 이슈 개수 (Open/Resolved)</param>
+        /// <param name="docIssueCount">문서 이슈 개수 (Open/Resolved)</param>
+        /// <returns>최종 산출된 점수</returns>
         public static int CalculateFinalScore(
             int featureBugPrCount,
             int docPrCount,
