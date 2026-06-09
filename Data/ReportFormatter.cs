@@ -69,14 +69,14 @@ namespace RepoScore.Data
 
                 var r = row.Raw;
 
-                int maxAdditionalPr = 3 * Math.Max(r.featBugPrs, 1);
-                int totalDocTypoPr = r.docPrs + r.typoPrs;
-                int rejectedPr = Math.Max(0, totalDocTypoPr - maxAdditionalPr);
+                var limits = ScoreCalculator.CalculateLimits(r.featBugPrs, r.docPrs, r.typoPrs, r.featBugIssues, r.docIssues);
 
-                int validPrCount = r.featBugPrs + Math.Min(totalDocTypoPr, maxAdditionalPr);
-                int maxIssueCount = 4 * validPrCount;
-                int totalIssues = r.featBugIssues + r.docIssues;
-                int rejectedIssue = Math.Max(0, totalIssues - maxIssueCount);
+                int maxAdditionalPr = limits.MaxDocTypoPrCount;
+                int rejectedPr = limits.RejectedPrCount;
+                int maxIssueCount = limits.MaxIssueCount;
+                int rejectedIssue = limits.RejectedIssueCount;
+
+                int totalDocTypoPr = r.docPrs + r.typoPrs;
 
                 if (rejectedPr > 0 || rejectedIssue > 0)
                 {
@@ -86,20 +86,20 @@ namespace RepoScore.Data
 
                     if (rejectedPr > 0)
                     {
-                        int docSuggestionCount = (rejectedPr + 2) / 3;
-                        userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {docSuggestionCount}개 추가 시 문서PR 인정 한도 +{docSuggestionCount * 3}");
+                        int docSuggestionCount = (rejectedPr + (ScoreCalculator.MaxDocTypoPrMultiplier - 1)) / ScoreCalculator.MaxDocTypoPrMultiplier;
+                        userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {docSuggestionCount}개 추가 시 문서PR 인정 한도 +{docSuggestionCount * ScoreCalculator.MaxDocTypoPrMultiplier}");
                     }
 
                     if (rejectedIssue > 0)
                     {
-                        int issueSuggestionCount = (rejectedIssue + 3) / 4;
+                        int issueSuggestionCount = (rejectedIssue + (ScoreCalculator.MaxIssuePerValidPrMultiplier - 1)) / ScoreCalculator.MaxIssuePerValidPrMultiplier;
                         if (totalDocTypoPr < maxAdditionalPr)
                         {
-                            userRejections.AppendLine($"   [추가 제안] 문서 PR {issueSuggestionCount}개 추가 혹은 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
+                            userRejections.AppendLine($"   [추가 제안] 문서 PR {issueSuggestionCount}개 추가 혹은 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * ScoreCalculator.MaxIssuePerValidPrMultiplier}");
                         }
                         else
                         {
-                            userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * 4}");
+                            userRejections.AppendLine($"   [추가 제안] 기능/버그 PR {issueSuggestionCount}개 추가시 이슈 인정한도 +{issueSuggestionCount * ScoreCalculator.MaxIssuePerValidPrMultiplier}");
                         }
                     }
 
