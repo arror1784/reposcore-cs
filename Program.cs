@@ -146,7 +146,7 @@ await CoconaApp.RunAsync(async (
                         cachedOpenIssues, cachedOpenPrs, claimsSince);
 
                     var report = ReportFormatter.BuildClaimsReport(claimsData, (ClaimsMode)claims);
-                    Console.Write(report);
+                    Console.Write($"=== {repo} 이슈 선점 현황 ===\n{report}\n");
 
                     CacheManager.SaveClaimsCache(cachePath, cache, updatedOpenIssues, updatedOpenPrs);
                     Log.Information("[{Repo}] Claims 캐시 갱신 완료: {CachePath}", repo, cachePath);
