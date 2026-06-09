@@ -284,7 +284,7 @@ dotnet run -- oss2026hnu/reposcore-cs -t ghp_xxxxx --sort-by score --sort-order 
 
 ```bash
 # 이슈별 조회 (기본)
-dotnet run -- oss2026hnu/reposcore-cs --claims -t ghp_xxxxx
+dotnet run -- oss2026hnu/reposcore-cs --claims issue -t ghp_xxxxx
 
 # 유저별 조회
 dotnet run -- oss2026hnu/reposcore-cs --claims user -t ghp_xxxxx
