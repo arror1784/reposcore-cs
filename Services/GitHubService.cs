@@ -467,13 +467,17 @@ namespace RepoScore.Services
                             }
                         }
 
+                        var closedReason = ParseIssueClosedStateReason(node);
+                        if (closedReason == IssueClosedStateReason.Duplicate || closedReason == IssueClosedStateReason.NotPlanned)
+                            continue;
+
                         issueRecords.Add(new IssueRecord
                         {
                             Number = node.TryGetProperty("number", out var numEl) ? numEl.GetInt32() : 0,
                             Title = node.TryGetProperty("title", out var titEl) ? titEl.GetString() ?? "" : "",
                             Url = node.TryGetProperty("url", out var urlEl) ? urlEl.GetString() ?? "" : "",
                             AuthorLogin = authorLogin,
-                            ClosedReason = ParseIssueClosedStateReason(node),
+                            ClosedReason = closedReason,
                             Labels = labelNames.Select(ParseGitHubLabel).Where(l => l != GitHubIssuePrLabel.None).ToList(),
                             UpdatedAt = updatedAt
                         });
