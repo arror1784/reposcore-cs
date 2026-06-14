@@ -67,7 +67,7 @@ await CoconaApp.RunAsync(async (
 
     if (activeFormats.Count == 0) activeFormats.Add(OutputFormat.Csv);
 
-    // 토큰 확인 단계를 위로 이동 (저장소 존재 여부 네트워크 검증에 필수적이기 때문)
+    // 토큰 확인 단계를 위로 이동
     token ??= Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     if (string.IsNullOrEmpty(token))
     {
@@ -76,8 +76,23 @@ await CoconaApp.RunAsync(async (
         throw new CommandExitedException(1);
     }
 
-    // [리팩토링 포인트] 1단계&2단계: 저장소 유효성(형식 + 실제 존재 여부) 일괄 사전 검증
-    var (malformed, notFound) = await GitHubService.ValidateRepositoriesAsync(repos, token);
+    // [버그 수정 블록] 저장소 유효성 사전 일괄 검증 처리부 가두기
+    List<string> malformed = new();
+    List<string> notFound = new();
+
+    try
+    {
+        var validationResult = await GitHubService.ValidateRepositoriesAsync(repos, token);
+        malformed = validationResult.Malformed;
+        notFound = validationResult.NotFound;
+    }
+    catch (UnauthorizedAccessException ex)
+    {
+        // GitHubService단에서 던진 토큰 인증 불일치 전용 오류 캐치 및 포맷 출력 사양 만족
+        Log.Error("오류: {Message}", ex.Message);
+        Log.Error("도움말을 보려면 --help 옵션을 사용하세요.");
+        throw new CommandExitedException(1);
+    }
 
     if (malformed.Count > 0)
     {
@@ -260,7 +275,6 @@ await CoconaApp.RunAsync(async (
             }
             catch (Exception ex)
             {
-                // [리팩토링 포인트] 수집 단단으로 존재 검증을 옮겼으므로, 강제 중단(Environment.Exit) 분기를 지우고 일관되게 repoFailures 처리
                 Log.Error(ex, "[{Repo}] 처리 중 예외가 발생했습니다.", repo);
                 repoFailures.Add(repo);
             }

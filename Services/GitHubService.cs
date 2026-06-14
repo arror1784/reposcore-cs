@@ -292,8 +292,20 @@ namespace RepoScore.Services
                         foreach (var vr in validRepos) notFound.Add(vr.Original);
                     }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
+                    // [버그 수정 블록] 인증 실패 관련 오류 메시지가 포함되었는지 정밀 확인
+                    string errorMsg = ex.Message.ToLowerInvariant();
+                    if (errorMsg.Contains("401") ||
+                        errorMsg.Contains("unauthorized") ||
+                        errorMsg.Contains("bad credentials") ||
+                        errorMsg.Contains("token is invalid"))
+                    {
+                        // 단순 저장소 누락이 아니므로 인증 에러 전용 예외를 뿜어냄
+                        throw new UnauthorizedAccessException("GitHub API 인증에 실패했습니다. --token 값 또는 GITHUB_TOKEN을 확인하세요.", ex);
+                    }
+
+                    // 단순 타임아웃 등 일반 예외는 기존 사양대로 저장소 오류로 우회
                     foreach (var vr in validRepos) notFound.Add(vr.Original);
                 }
             }
@@ -494,10 +506,6 @@ namespace RepoScore.Services
         /// <summary>
         /// 저장소의 열린 이슈들을 대상으로 최근 48시간 이내에 발생한 선점 현황 데이터와 점검이 완료된 오픈 데이터들을 비동기 조회합니다.
         /// </summary>
-        /// <param name="cachedOpenIssues">기존에 임시 보관 중이던 열린 이슈 목록 데이터</param>
-        /// <param name="cachedOpenPrs">기존에 임시 보관 중이던 열린 Pull Request 목록 데이터</param>
-        /// <param name="since">캐시 갱신 판단 지점이 되는 특정 기준 일시</param>
-        /// <returns>선점 통계 데이터 맵 및 최신으로 동기화된 오픈 이슈/PR 목록 결과 튜플</returns>
         public async System.Threading.Tasks.Task<(ClaimsData claimsData, List<IssueRecord> updatedOpenIssues, List<PRRecord> updatedOpenPrs)>
             GetRecentClaimsDataAsync(
                 List<IssueRecord>? cachedOpenIssues = null,
@@ -597,8 +605,6 @@ namespace RepoScore.Services
         /// <summary>
         /// 현재 열려 있는 상태의 이슈 목록과 그에 포함된 특정 선점 키워드 댓글 기록을 결합하여 함께 비동기 조회합니다.
         /// </summary>
-        /// <param name="since">수집 필터링 기준이 될 최종 변경 일시</param>
-        /// <returns>열린 상태의 이슈 목록 리스트와 닫힌 이슈 번호들을 추적한 해시셋 결과 튜플</returns>
         private async System.Threading.Tasks.Task<(List<IssueRecord> openIssues, HashSet<int> closedIssueNumbers)>
             FetchOpenIssuesWithClaimCommentsAsync(DateTimeOffset? since = null)
         {
@@ -793,10 +799,8 @@ namespace RepoScore.Services
         }
 
         /// <summary>
-        /// 현재 오픈 상태인 Pull Request 목록을 조회하고, 정규표현식을 매칭하여 PR 본문 내에서 교차 참조 중인 연결 이슈 번호 리스트를 함께 구합니다.
+        /// 현재 오픈 상태인 Pull Request 목록을 조회하고 연결 이슈 번호 리스트를 함께 구합니당.
         /// </summary>
-        /// <param name="since">필터링을 적용할 변경점 기록 일시 기준</param>
-        /// <returns>연동 관계 파싱 데이터가 포함된 <see cref="PRWithLinkedIssues"/>의 리스트</returns>
         public async System.Threading.Tasks.Task<List<PRWithLinkedIssues>> GetOpenPullRequestsWithLinkedIssuesAsync(DateTimeOffset? since = null)
         {
             var prsWithIssues = new List<PRWithLinkedIssues>();
@@ -868,21 +872,11 @@ namespace RepoScore.Services
             return prsWithIssues;
         }
 
-        /// <summary>
-        /// 이슈 레이블 목록을 기준으로 현재 작업이 단순 문서화 관련(Documentation 또는 Typo) 성격의 태스크인지 검사합니다.
-        /// </summary>
-        /// <param name="issueLabels">검증을 진행할 이슈 레이블 목록</param>
-        /// <returns>문서화 기여 작업에 해당되면 true, 그렇지 않으면 false를 반환합니다.</returns>
         internal static bool IsDocumentTask(List<GitHubIssuePrLabel> issueLabels)
         {
             return issueLabels.Contains(GitHubIssuePrLabel.Documentation) || issueLabels.Contains(GitHubIssuePrLabel.Typo);
         }
 
-        /// <summary>
-        /// 문자열 형식의 GitHub 레이블 이름을 시스템 내부 열거형인 <see cref="GitHubIssuePrLabel"/>로 변환 및 파싱합니다.
-        /// </summary>
-        /// <param name="labelName">GitHub 저장소에서 수집된 레이블 텍스트</param>
-        /// <returns>매칭이 완료된 시스템 레이블 열거형 값 (미일치 시 None 반환)</returns>
         internal static GitHubIssuePrLabel ParseGitHubLabel(string labelName)
         {
             if (string.IsNullOrEmpty(labelName)) return GitHubIssuePrLabel.None;
@@ -905,11 +899,6 @@ namespace RepoScore.Services
             };
         }
 
-        /// <summary>
-        /// Json 응답 요소 내에 표기된 이슈 종료 사유 필드(stateReason)를 시스템 열거형 구조로 추출 및 파싱합니다.
-        /// </summary>
-        /// <param name="issueNode">파싱 대상이 되는 단일 이슈 노드의 Json 요소 객체</param>
-        /// <returns>추출된 이슈 완료 사유 상태값 (<see cref="IssueClosedStateReason"/>)</returns>
         internal static IssueClosedStateReason ParseIssueClosedStateReason(JsonElement issueNode)
         {
             if (!issueNode.TryGetProperty("stateReason", out var stateReasonElement) ||
