@@ -173,5 +173,38 @@ namespace RepoScore.Data
                 .OrderBy(x => x)
                 .SequenceEqual(currentKeywords.OrderBy(x => x));
         }
+
+        /// <summary>
+        /// 다수의 저장소에서 수집된 유저별 기록을 중복을 제거하여 하나로 병합합니다.
+        /// </summary>
+        public static void MergeUserRecords<T>(
+            Dictionary<string, List<T>> target,
+            Dictionary<string, List<T>> source)
+        {
+            foreach (var (user, items) in source)
+            {
+                if (!target.TryGetValue(user, out var targetList))
+                {
+                    targetList = new List<T>();
+                    target[user] = targetList;
+                }
+
+                foreach (var item in items)
+                {
+                    bool isDuplicate = item switch
+                    {
+                        IssueRecord issue => string.IsNullOrEmpty(issue.Url)
+                            ? targetList.Any(t => t is IssueRecord i && string.IsNullOrEmpty(i.Url) && i.Number == issue.Number)
+                            : targetList.Any(t => t is IssueRecord i && i.Url == issue.Url),
+                        PRRecord pr => string.IsNullOrEmpty(pr.Url)
+                            ? targetList.Any(t => t is PRRecord p && string.IsNullOrEmpty(p.Url) && p.Number == pr.Number)
+                            : targetList.Any(t => t is PRRecord p && p.Url == pr.Url),
+                        _ => false
+                    };
+
+                    if (!isDuplicate) targetList.Add(item);
+                }
+            }
+        }
     }
 }

@@ -251,7 +251,7 @@ await CoconaApp.RunAsync(async (
                 reportData = ReportSorter.SortReportData(reportData, sortBy, sortOrder);
 
                 // ── 개별 저장소 리포트 출력 ──
-                ExportReports(repo, reportData, activeFormats, repoOutput);
+                ReportFormatter.ExportReports(repo, reportData, activeFormats, repoOutput);
 
                 if (repos.Length > 1)
                 {
@@ -286,8 +286,8 @@ await CoconaApp.RunAsync(async (
 
             foreach (var (_, (userIssues, userPrs)) in repoResults)
             {
-                MergeUserRecords(totalUserIssues, userIssues);
-                MergeUserRecords(totalUserPullRequests, userPrs);
+                CacheManager.MergeUserRecords(totalUserIssues, userIssues);
+                CacheManager.MergeUserRecords(totalUserPullRequests, userPrs);
             }
 
             var totalReportData = new List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)>();
@@ -312,7 +312,7 @@ await CoconaApp.RunAsync(async (
             totalReportData = ReportSorter.SortReportData(totalReportData, sortBy, sortOrder);
 
             string totalLabel = string.Join(" + ", repos);
-            ExportReports(totalLabel, totalReportData, activeFormats, output);
+            ReportFormatter.ExportReports(totalLabel, totalReportData, activeFormats, output);
         }
         catch (Exception ex)
         {
@@ -328,81 +328,3 @@ await CoconaApp.RunAsync(async (
         throw new CommandExitedException(1);
     }
 });
-
-
-/// <summary>
-/// CSV, TXT, HTML 서식에 맞춰 리포트 파일을 물리 디렉토리에 내보내는 공통 메서드
-/// </summary>
-static void ExportReports(
-    string label,
-    List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData,
-    HashSet<OutputFormat> activeFormats,
-    string outputDir)
-{
-    if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
-
-    if (activeFormats.Contains(OutputFormat.Csv))
-    {
-        var csv = new StringBuilder();
-        csv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
-        foreach (var r in reportData)
-            csv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
-
-        string csvPath = Path.Combine(outputDir, "results.csv");
-        File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
-        Log.Information("[{Label}] 데이터(CSV) 저장 완료: {CsvPath}", label, csvPath);
-    }
-
-    if (activeFormats.Contains(OutputFormat.Txt))
-    {
-        string txtPath = Path.Combine(outputDir, "results.txt");
-        string txtContent = ReportFormatter.BuildTextReport(label, reportData);
-        File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
-        Log.Information("[{Label}] 가독성 리포트(TXT) 저장 완료: {TxtPath}", label, txtPath);
-    }
-
-    if (activeFormats.Contains(OutputFormat.Html))
-    {
-        string htmlPath = Path.Combine(outputDir, "results.html");
-        string htmlContent = ReportFormatter.BuildHtmlReport(label, reportData);
-        File.WriteAllText(htmlPath, htmlContent, Encoding.UTF8);
-        Log.Information("[{Label}] HTML 리포트 저장 완료: {HtmlPath}", label, htmlPath);
-    }
-}
-
-static void MergeUserRecords<T>(
-    Dictionary<string, List<T>> target,
-    Dictionary<string, List<T>> source)
-{
-    foreach (var (user, items) in source)
-    {
-        if (!target.TryGetValue(user, out var targetList))
-        {
-            targetList = new List<T>();
-            target[user] = targetList;
-        }
-
-        foreach (var item in items)
-        {
-            bool isDuplicate = false;
-
-            if (item is IssueRecord issue)
-            {
-                isDuplicate = string.IsNullOrEmpty(issue.Url)
-                    ? targetList.Any(t => t is IssueRecord i && string.IsNullOrEmpty(i.Url) && i.Number == issue.Number)
-                    : targetList.Any(t => t is IssueRecord i && i.Url == issue.Url);
-            }
-            else if (item is PRRecord pr)
-            {
-                isDuplicate = string.IsNullOrEmpty(pr.Url)
-                    ? targetList.Any(t => t is PRRecord p && string.IsNullOrEmpty(p.Url) && p.Number == pr.Number)
-                    : targetList.Any(t => t is PRRecord p && p.Url == pr.Url);
-            }
-
-            if (!isDuplicate)
-            {
-                targetList.Add(item);
-            }
-        }
-    }
-}
