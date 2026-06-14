@@ -2,6 +2,7 @@ using System.Text;
 using RepoScore.Services;
 using System.Text.Json;
 using Spectre.Console;
+using Serilog;
 
 namespace RepoScore.Data
 {
@@ -309,6 +310,46 @@ namespace RepoScore.Data
         {
             if (remaining <= TimeSpan.Zero) return "   기한 초과";
             return $"   남은 시간: {(int)remaining.TotalHours:D2}:{remaining.Minutes:D2}:{remaining.Seconds:D2}";
+        }
+
+        /// <summary>
+        /// CSV, TXT, HTML 서식에 맞춰 리포트 파일을 물리 디렉토리에 내보내는 공통 메서드입니다.
+        /// </summary>
+        public static void ExportReports(
+            string label,
+            List<(string Id, int docIssues, int featBugIssues, int typoPrs, int docPrs, int featBugPrs, int Score)> reportData,
+            HashSet<OutputFormat> activeFormats,
+            string outputDir)
+        {
+            if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
+
+            if (activeFormats.Contains(OutputFormat.Csv))
+            {
+                var csv = new StringBuilder();
+                csv.AppendLine("아이디, 문서이슈, 버그/기능이슈, 오타PR, 문서PR, 버그/기능PR, 총점");
+                foreach (var r in reportData)
+                    csv.AppendLine($"{r.Id}, {r.docIssues}, {r.featBugIssues}, {r.typoPrs}, {r.docPrs}, {r.featBugPrs}, {r.Score}");
+
+                string csvPath = Path.Combine(outputDir, "results.csv");
+                File.WriteAllText(csvPath, csv.ToString(), Encoding.UTF8);
+                Log.Information("[{Label}] 데이터(CSV) 저장 완료: {CsvPath}", label, csvPath);
+            }
+
+            if (activeFormats.Contains(OutputFormat.Txt))
+            {
+                string txtPath = Path.Combine(outputDir, "results.txt");
+                string txtContent = BuildTextReport(label, reportData);
+                File.WriteAllText(txtPath, txtContent, Encoding.UTF8);
+                Log.Information("[{Label}] 가독성 리포트(TXT) 저장 완료: {TxtPath}", label, txtPath);
+            }
+
+            if (activeFormats.Contains(OutputFormat.Html))
+            {
+                string htmlPath = Path.Combine(outputDir, "results.html");
+                string htmlContent = BuildHtmlReport(label, reportData);
+                File.WriteAllText(htmlPath, htmlContent, Encoding.UTF8);
+                Log.Information("[{Label}] HTML 리포트 저장 완료: {HtmlPath}", label, htmlPath);
+            }
         }
     }
 }

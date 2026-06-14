@@ -196,6 +196,9 @@ namespace RepoScore.Services
         private static readonly string[] s_defaultClaimKeywords = ["제가 하겠습니다", "진행하겠습니다", "할게요", "I'll take this"];
         private readonly string[] _claimKeywords;
 
+        public const double DefaultClaimExpirationHours = 48.0;
+        public const double DocumentClaimExpirationHours = 24.0;
+
         /// <summary>
         /// 지정된 저장소 정보 및 인증 토큰을 사용하여 <see cref="GitHubService"/> 클래스의 새 인스턴스를 초기화합니다.
         /// </summary>
@@ -510,7 +513,7 @@ namespace RepoScore.Services
                 DateTimeOffset? since = null)
         {
             var now = DateTimeOffset.UtcNow;
-            bool isFullRefresh = since == null || (now - since.Value).TotalHours > 48;
+            bool isFullRefresh = since == null || (now - since.Value).TotalHours > DefaultClaimExpirationHours;
 
             var freshOpenPrs = await GetOpenPullRequestsWithLinkedIssuesAsync(isFullRefresh ? null : since);
 
@@ -566,10 +569,10 @@ namespace RepoScore.Services
 
                 foreach (var comment in comments)
                 {
-                    if ((now - comment.CreatedAt).TotalHours > 48) continue;
+                    if ((now - comment.CreatedAt).TotalHours > DefaultClaimExpirationHours) continue;
 
                     var login = comment.AuthorLogin;
-                    var deadlineHours = IsDocumentTask(issueLabels) ? 24.0 : 48.0;
+                    var deadlineHours = IsDocumentTask(issueLabels) ? DocumentClaimExpirationHours : DefaultClaimExpirationHours;
                     var remaining = comment.CreatedAt.AddHours(deadlineHours) - now;
 
                     var linkedPrs = updatedOpenPrs
@@ -750,7 +753,7 @@ namespace RepoScore.Services
                                 ? DateTimeOffset.Parse(createdAtElement.GetString()!)
                                 : DateTimeOffset.MinValue;
 
-                            if ((now - createdAt).TotalHours > 48)
+                            if ((now - createdAt).TotalHours > DefaultClaimExpirationHours)
                             {
                                 continue;
                             }
